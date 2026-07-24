@@ -1,18 +1,28 @@
-# Sniffls
+<p align="center">
+  <img src="docs/images/logo.svg" alt="Sniffls" width="420" />
+</p>
 
-> 🌐 [简体中文](./README.zh-CN.md) &nbsp;|&nbsp; English
+<h1 align="center">Sniffls</h1>
 
+<p align="center">
+  🌐 <a href="./README.zh-CN.md">简体中文</a> &nbsp;|&nbsp; English<br/>
+  A cross-browser extension that <b>auto-detects m3u8 (HLS) streams</b> and <b>downloads them as MP4</b> — straight into your browser's download list. No desktop app, no ffmpeg, no external tools.
+</p>
+
+<p align="center">
+  Built with <b>WXT + React + TypeScript + Tailwind</b>. One codebase → <b>Chrome / Edge / Firefox / Safari</b> (Manifest V3).
+</p>
+
+<p align="center">
 <!-- Replace {repo} below with your GitHub repo URL, e.g. https://github.com/user/sniff-hls -->
+  <a href="{repo}/stargazers"><img alt="GitHub stars" src="https://img.shields.io/badge/⭐-Star_on_GitHub-4f46e5?style=for-the-badge"></a>
+  <a href="https://paypal.me/halo651891"><img alt="Donate with PayPal" src="https://img.shields.io/badge/💛-Donate_with_PayPal-0070ba?style=for-the-badge"></a>
+  <a href="#-license"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge"></a>
+</p>
 
-[![GitHub stars](https://img.shields.io/badge/⭐-Star_on_GitHub-4f46e5?style=for-the-badge)]({repo}/stargazers)
-[![Donate with PayPal](https://img.shields.io/badge/💛-Donate_with_PayPal-0070ba?style=for-the-badge)](https://paypal.me/halo651891)
-[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](#-license)
-
-A cross-browser extension that **auto-detects m3u8 (HLS) streams** on any page and **downloads them as MP4** — directly into your browser's download list. No desktop app, no ffmpeg, no external tools.
-
-Built with **WXT + React + TypeScript + Tailwind**. One codebase → **Chrome / Edge / Firefox / Safari** (Manifest V3).
-
-> 💖 **Found it useful?** Give it a ⭐ on GitHub, or [buy the author a coffee via PayPal](https://paypal.me/halo651891) — every cup keeps the project brewing. ☕
+<p align="center">
+  💖 Found it useful? Give it a ⭐ on GitHub, or <a href="https://paypal.me/halo651891">buy the author a coffee via PayPal</a> — every cup keeps the project brewing. ☕
+</p>
 
 ---
 

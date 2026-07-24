@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="104" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+
+  <!-- icon mark -->
+  <g transform="translate(18,18)">
+    <rect width="104" height="104" rx="24" fill="url(#bg)"/>
+    <!-- sniff signal arcs -->
+    <g stroke="#ffffff" stroke-opacity="0.4" stroke-width="4" stroke-linecap="round" fill="none">
+      <path d="M26 38 a12 12 0 0 1 12 -12"/>
+      <path d="M19 44 a20 20 0 0 1 20 -20"/>
+    </g>
+    <!-- download arrow -->
+    <path d="M40 26 H66 V49 H78 L53 75 L28 49 H40 Z" fill="#ffffff"/>
+    <rect x="28" y="82" width="50" height="7.5" rx="3.75" fill="#ffffff"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="148" y="86" font-size="46" font-weight="700" fill="#0f172a" letter-spacing="-1">Sniffls</text>
+  <!-- tagline -->
+  <text x="150" y="112" font-size="13" fill="#64748b">detect &amp; download m3u8 / HLS as MP4</text>
+</svg>

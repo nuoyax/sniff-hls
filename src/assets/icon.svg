@@ -1,5 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
-  <rect width="128" height="128" rx="28" fill="#4F46E5"/>
-  <path d="M44 40v48l40-24-40-24Z" fill="#fff"/>
-  <rect x="84" y="40" width="8" height="48" rx="2" fill="#fff" opacity="0.55"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded app tile -->
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+
+  <!-- "sniff" signal arcs, top-left, subtle (reads at 48px+) -->
+  <g stroke="#ffffff" stroke-opacity="0.4" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M30 44 a14 14 0 0 1 14 -14"/>
+    <path d="M22 50 a24 24 0 0 1 24 -24"/>
+  </g>
+
+  <!-- download arrow (the action) -->
+  <path d="M48 32 H80 V60 H94 L64 92 L34 60 H48 Z" fill="#ffffff"/>
+  <!-- tray -->
+  <rect x="34" y="100" width="60" height="9" rx="4.5" fill="#ffffff"/>
 </svg>
