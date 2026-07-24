@@ -281,5 +281,3 @@ npm test
 ## 📄 License
 
 MIT © Sniffls contributors.
-
-> ⚠️ Use responsibly. Only download content you have the right to access. Respect copyright and the terms of service of the websites you visit.
