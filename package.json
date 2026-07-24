@@ -8,15 +8,18 @@
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
+    "build:all": "wxt build && wxt build -b edge && wxt build -b firefox && wxt build -b safari",
     "build:firefox": "wxt build -b firefox",
     "build:edge": "wxt build -b edge",
     "build:safari": "wxt build -b safari",
     "zip": "wxt zip",
+    "zip:all": "wxt zip && wxt zip -b edge && wxt zip -b firefox",
     "zip:firefox": "wxt zip -b firefox",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint skipped (none configured)'"
+    "lint": "echo 'lint skipped (none configured)'",
+    "version": "node scripts/sync-version.js && git add README.md README.zh-CN.md package.json"
   },
   "dependencies": {
     "clsx": "^2.1.1",
