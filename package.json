@@ -1,6 +1,6 @@
 {
   "name": "sniff-hls",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Sniffls — cross-browser extension to detect and download m3u8 (HLS) video as MP4. Chrome / Edge / Firefox / Safari.",
   "type": "module",
   "license": "MIT",
