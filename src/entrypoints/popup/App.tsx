@@ -5,8 +5,8 @@ import { Button } from '@/components/Button';
 import { Badge, qualityLabel } from '@/components/Badge';
 import { EmptyState } from '@/components/EmptyState';
 import { ProgressRing } from '@/components/Progress';
-import { Settings, RefreshCw, Download as DownloadIcon, ListVideo, ExternalLink } from 'lucide-react';
-import { deriveBaseFilename } from '@/lib/detection/urlNormalizer';
+import { Settings, RefreshCw, Download as DownloadIcon, ListVideo, Edit3, Check } from 'lucide-react';
+import { deriveBaseFilename, buildDefaultFilename, sanitizeTitleStem, timestampString } from '@/lib/detection/urlNormalizer';
 
 interface ActiveDownload {
   jobId: string;
@@ -20,6 +20,7 @@ export default function App() {
   const [detections, setDetections] = useState<DetectedItem[]>([]);
   const [tabId, setTabId] = useState<number | null>(null);
   const [pageUrl, setPageUrl] = useState<string | undefined>();
+  const [pageTitle, setPageTitle] = useState<string | undefined>();
   const [autoDetect, setAutoDetect] = useState(true);
   const [active, setActive] = useState<Record<string, ActiveDownload>>({});
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,14 @@ export default function App() {
       }
       setTabId(tab.id);
       setPageUrl(tab.url);
+      // Fetch the page title from the SW for a sensible default filename.
+      const info = await sendMessage({ type: 'GET_TAB_INFO', tabId: tab.id });
+      if (info.ok && info.data) {
+        const t = info.data as { title?: string; url?: string };
+        setPageTitle(t.title);
+      } else if (tab.title) {
+        setPageTitle(tab.title);
+      }
       await refresh(tab.id);
       setLoading(false);
     })();
@@ -58,15 +67,20 @@ export default function App() {
   }, []);
 
   const startDownload = useCallback(
-    async (url: string, variant?: VariantInfo) => {
+    async (url: string, variant: VariantInfo | undefined, customFilename?: string) => {
       if (tabId == null) return;
+      // Default filename: page title + timestamp; user can override via the
+      // rename field. Sanitize and append a fresh timestamp on every download.
+      const base = customFilename && customFilename.trim()
+        ? `${sanitizeTitleStem(customFilename.trim())}_${timestampString()}`
+        : buildDefaultFilename(pageTitle);
       const res = await sendMessage({
         type: 'START_DOWNLOAD',
         payload: {
           url,
           format: 'auto' as OutputFormat,
           variantUrl: variant?.url,
-          baseFilename: deriveBaseFilename(url),
+          baseFilename: base,
           pageUrl,
           tabId,
         },
@@ -86,7 +100,7 @@ export default function App() {
         });
       }
     },
-    [tabId, pageUrl],
+    [tabId, pageUrl, pageTitle],
   );
 
   const cancel = useCallback(async (jobId: string, url: string) => {
@@ -126,7 +140,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="max-h-[420px] overflow-y-auto p-2">
+      <div className="max-h-[440px] overflow-y-auto p-2">
         {detections.length === 0 ? (
           <EmptyState
             title="No m3u8 detected yet"
@@ -143,8 +157,9 @@ export default function App() {
               <StreamItem
                 key={d.url}
                 item={d}
+                pageTitle={pageTitle}
                 active={active[d.url]}
-                onDownload={(v) => startDownload(d.url, v)}
+                onDownload={(v, fname) => startDownload(d.url, v, fname)}
                 onCancel={() => active[d.url] && cancel(active[d.url].jobId, d.url)}
               />
             ))}
@@ -171,13 +186,15 @@ export default function App() {
 
 function StreamItem({
   item,
+  pageTitle,
   active,
   onDownload,
   onCancel,
 }: {
   item: DetectedItem;
+  pageTitle?: string;
   active?: ActiveDownload;
-  onDownload: (variant?: VariantInfo) => void;
+  onDownload: (variant?: VariantInfo, filename?: string) => void;
   onCancel: () => void;
 }) {
   const variants = item.variants ?? [];
@@ -185,6 +202,19 @@ function StreamItem({
   const isDownloading = active && ['fetching', 'decrypting', 'transmuxing', 'assembling', 'downloading'].includes(active.status);
   const isDone = active?.status === 'complete';
   const isError = active?.status === 'error';
+
+  // Editable filename state. Defaults to page-title-based stem (no timestamp
+  // yet — timestamp appended on actual download so re-downloads don't collide).
+  const defaultStem = pageTitle ? sanitizeTitleStem(pageTitle) : deriveBaseFilename(item.url);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(defaultStem);
+
+  // Keep the editable name in sync if the page title arrives after mount.
+  useEffect(() => {
+    if (!editing) setName(pageTitle ? sanitizeTitleStem(pageTitle) : deriveBaseFilename(item.url));
+  }, [pageTitle, item.url, editing]);
+
+  const trigger = (v?: VariantInfo) => onDownload(v, name);
 
   return (
     <li className="rounded-xl border border-border bg-bg-elevated p-3 shadow-card transition-colors hover:border-accent/40">
@@ -222,19 +252,54 @@ function StreamItem({
               <span title={active?.error}>failed</span>
             </Badge>
           ) : (
-            <Button variant="primary" size="sm" onClick={() => onDownload(best)}>
+            <Button variant="primary" size="sm" onClick={() => trigger(best)}>
               <DownloadIcon className="h-3.5 w-3.5" /> Download
             </Button>
           )}
         </div>
       </div>
 
+      {/* Filename editor */}
+      {!isDownloading && !isDone && (
+        <div className="mt-2 flex items-center gap-1.5">
+          {editing ? (
+            <>
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { setEditing(false); trigger(best); }
+                  if (e.key === 'Escape') { setEditing(false); setName(defaultStem); }
+                }}
+                placeholder="filename"
+                className="min-w-0 flex-1 rounded-md border border-accent/50 bg-bg px-2 py-1 text-[11px] text-fg focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60"
+              />
+              <span className="shrink-0 font-mono text-[10px] text-fg-muted">_&lt;ts&gt;.mp4</span>
+              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); trigger(best); }} title="Confirm">
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : (
+            <button
+              onClick={() => setEditing(true)}
+              className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-[11px] text-fg-muted hover:border-accent/40 hover:text-fg"
+              title="Click to rename"
+            >
+              <Edit3 className="h-3 w-3 shrink-0" />
+              <span className="truncate">{name}</span>
+              <span className="shrink-0 font-mono">_{timestampString().slice(0, 8)}…</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {variants.length > 1 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {variants.map((v, i) => (
             <button
               key={i}
-              onClick={() => onDownload(v)}
+              onClick={() => trigger(v)}
               className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-fg-muted hover:border-accent/40 hover:text-fg"
               title={v.url}
             >
@@ -255,7 +320,7 @@ function hostOf(url: string): string {
   }
 }
 
-async function getCurrentTab(): Promise<{ id?: number; url?: string } | null> {
+async function getCurrentTab(): Promise<{ id?: number; url?: string; title?: string } | null> {
   const b = (typeof browser !== 'undefined' ? browser : chrome) as any;
   const [tab] = await b.tabs.query({ active: true, currentWindow: true });
   return tab || null;

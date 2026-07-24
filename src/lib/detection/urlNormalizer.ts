@@ -70,3 +70,42 @@ export function deriveBaseFilename(url: string): string {
     return 'video';
   }
 }
+
+/**
+ * Sanitize a raw title/name into a filename-safe stem:
+ * strip OS-illegal + special characters, collapse whitespace to single spaces,
+ * trim. e.g. "My Video: Best <clips> 2024!" -> "My Video Best clips 2024"
+ */
+export function sanitizeTitleStem(raw: string): string {
+  if (!raw) return 'video';
+  // Remove OS-illegal chars (Windows < > : " / \ | ? * and control chars)
+  let s = raw.replace(/[<>:"/\\|?*\x00-\x1f]/g, '');
+  // Remove other special chars but keep word chars, spaces, CJK, hyphen, dot, parens
+  s = s.replace(/[`~!@#$%^&*+=\[\]{};'",<>]/g, '');
+  // Collapse whitespace runs to a single space
+  s = s.replace(/\s+/g, ' ').trim();
+  return s || 'video';
+}
+
+/**
+ * Build a download base filename from a page title + timestamp suffix.
+ * Format: "<sanitized title>_<yyyyMMdd_HHmmss>"
+ */
+export function buildDefaultFilename(title?: string): string {
+  const stem = sanitizeTitleStem(title || '');
+  const ts = timestampString();
+  return `${stem}_${ts}`;
+}
+
+/** Compact local timestamp: 20260724_153045 (no Date.now() needed — caller passes epoch). */
+export function timestampString(epochMs: number = Date.now()): string {
+  const d = new Date(epochMs);
+  const p = (n: number) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const mm = p(d.getMonth() + 1);
+  const dd = p(d.getDate());
+  const hh = p(d.getHours());
+  const mi = p(d.getMinutes());
+  const ss = p(d.getSeconds());
+  return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
+}

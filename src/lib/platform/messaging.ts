@@ -4,6 +4,7 @@ import { bapi } from './browser';
 // ----- Request/Response schema -----
 export type Request =
   | { type: 'GET_DETECTIONS'; tabId: number }
+  | { type: 'GET_TAB_INFO'; tabId: number }
   | { type: 'SCAN_PAGE'; tabId: number }
   | { type: 'START_DOWNLOAD'; payload: StartDownloadPayload }
   | { type: 'CANCEL_DOWNLOAD'; jobId: string }
@@ -19,6 +20,11 @@ export interface StartDownloadPayload {
   baseFilename: string;
   pageUrl?: string;
   tabId?: number;
+}
+
+export interface TabInfo {
+  title?: string;
+  url?: string;
 }
 
 export interface Response {

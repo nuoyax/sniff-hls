@@ -141,6 +141,15 @@ async function safeTabUrl(tabId: number): Promise<string | undefined> {
   }
 }
 
+async function safeTabInfo(tabId: number): Promise<{ title?: string; url?: string }> {
+  try {
+    const t = await bapi.tabs.get(tabId);
+    return { title: t?.title, url: t?.url };
+  } catch {
+    return {};
+  }
+}
+
 async function refreshBadge(tabId: number, count?: number) {
   const s = await getSettings();
   if (!s.autoDetect) {
@@ -163,6 +172,10 @@ async function handleMessage(req: Request): Promise<Response> {
     case 'GET_DETECTIONS': {
       const list = await getDetections(req.tabId);
       return { ok: true, data: list };
+    }
+    case 'GET_TAB_INFO': {
+      const info = await safeTabInfo(req.tabId);
+      return { ok: true, data: info };
     }
     case 'SCAN_PAGE': {
       try {
@@ -227,7 +240,13 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
   const s = await getSettings();
   const jobId = genId('dl_');
   const historyId = genId('h_');
+  // The popup already sanitized + timestamped the filename; sanitize again as
+  // a defense-in-depth (also normalizes for programmatic START_DOWNLOAD calls).
   const baseFilename = sanitizeFilename(req.payload.baseFilename || deriveBaseFilename(req.payload.url));
+
+  // Apply the user's configured download subfolder, if any.
+  const subfolder = (s.subfolder || '').trim().replace(/[<>:"/\\|?*]/g, '').replace(/^\/+|\/+$/g, '');
+  const fullFilename = subfolder ? `${subfolder}/${baseFilename}.mp4` : `${baseFilename}.mp4`;
 
   const job: DownloadJob = {
     id: jobId,
@@ -244,7 +263,7 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
     id: historyId,
     url: req.payload.url,
     pageUrl: req.payload.pageUrl,
-    filename: `${baseFilename}.mp4`,
+    filename: fullFilename,
     format: job.format,
     sizeBytes: 0,
     startedAt: Date.now(),
