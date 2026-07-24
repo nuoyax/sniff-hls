@@ -29,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npm run typecheck
+        run: npm run typecheck  # runs `wxt prepare` first to generate .wxt types
 
       - name: Test
         run: npm test

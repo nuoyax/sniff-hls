@@ -17,7 +17,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "wxt prepare && tsc --noEmit",
     "lint": "echo 'lint skipped (none configured)'",
     "version": "node scripts/sync-version.js && git add README.md README.zh-CN.md package.json"
   },
