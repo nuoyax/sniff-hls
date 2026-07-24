@@ -37,26 +37,20 @@ jobs:
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Build all targets
-        run: |
-          npm run build
-          npm run build:edge
-          npm run build:firefox
-          npm run build:safari
+        run: npm run build:all
 
       - name: Package all targets
-        run: |
-          npm run zip
-          npm run zip:firefox
-        env:
-          # Edge shares the Chromium build; Safari needs no separate zip for install.
-          # We produce chrome + firefox zips; rename edge build into its own zip
-          # so Edge users have an obviously-named artifact.
-          WXT_DEBUG: 0
+        run: npm run zip:all
 
+      # Edge shares the Chromium build (byte-identical MV3), so copy the
+      # chrome zip to an edge-named zip for discoverability.
       - name: Produce Edge-named zip
         run: |
-          cp .output/sniff-hls-${{ steps.ver.outputs.version }}-chrome.zip \
-             .output/sniff-hls-${{ steps.ver.outputs.version }}-edge.zip
+          cp ".output/sniff-hls-${{ steps.ver.outputs.version }}-chrome.zip" \
+             ".output/sniff-hls-${{ steps.ver.outputs.version }}-edge.zip"
+
+      - name: List packaged artifacts
+        run: ls -la .output/*.zip
 
       - name: Generate release notes
         id: notes
@@ -84,7 +78,7 @@ jobs:
             echo "| Safari | build from source with Xcode |"
             echo ""
             echo "See the README for full per-browser instructions."
-          } >> release_notes.md
+          } > release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

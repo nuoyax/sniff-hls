@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import pkg from './package.json' assert { type: 'json' };
 
 // See https://wxt.dev/api/config.html
 // The `manifest` field can be an object or a function (env) => manifest where
@@ -12,6 +13,10 @@ export default defineConfig({
     baseIconPath: 'assets/icon.svg',
     sizes: [16, 32, 48, 128],
   },
+  // Single source of truth for the version: package.json. The manifest's
+  // `version` field drives wxt's zip filename (sniff-hls-<version>-<browser>.zip),
+  // so keeping it in sync with package.json makes release artifact names match
+  // the git tag (v<version>).
   manifest: (env) => {
     const isFirefox = env.browser === 'firefox';
     const isChromium = env.browser === 'chrome' || env.browser === 'edge';
@@ -33,7 +38,7 @@ export default defineConfig({
       name: 'Sniffls',
       description:
         'Detect and download m3u8 (HLS) video as MP4. Network + DOM sniffing, concurrent fetch, AES-128 decrypt, MP4 with .ts fallback.',
-      version: '0.1.0',
+      version: pkg.version,
       permissions,
       host_permissions: ['<all_urls>'],
       optional_permissions: ['proxy'],
