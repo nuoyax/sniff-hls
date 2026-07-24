@@ -16,7 +16,7 @@
 <p align="center">
 <!-- Replace {repo} below with your GitHub repo URL, e.g. https://github.com/user/sniff-hls -->
   <a href="{repo}/stargazers"><img alt="GitHub stars" src="https://img.shields.io/badge/⭐-Star_on_GitHub-4f46e5?style=for-the-badge"></a>
-  <a href="https://paypal.me/halo651891"><img alt="Donate with PayPal" src="https://img.shields.io/badge/💛-Donate_with_PayPal-0070ba?style=for-the-badge"></a>
+  <a href="https://paypal.me/halo651891"><img alt="Donate with PayPal" src="https://img.shields.io/badge/Donate_with_PayPal-0070ba?style=for-the-badge&logo=paypal&logoColor=white"></a>
   <a href="#-license"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge"></a>
 </p>
 
@@ -28,7 +28,7 @@
 
 ## ✨ Features
 
-- **Auto-detect** m3u8 on every page via network sniffing (`webRequest`) + on-demand DOM scan.
+- **Auto-detect** m3u8 on every page via network sniffing (`webRequest`) + on-demand DOM scan — including wrapper URLs that bury the real playlist in a `?url=` query.
 - **Download as MP4** — transmuxes `.ts` segments to fMP4 with `mux.js` (no re-encode, fast). **Automatic `.ts` fallback** when a stream is encrypted with an unsupported cipher or uses an unusual codec.
 - **AES-128 decryption** via WebCrypto (explicit IV or sequence-derived, per RFC 8216).
 - **Quality picker** — lists every rendition from a master playlist; defaults to highest bandwidth.
@@ -75,18 +75,18 @@
                                       │  chrome.downloads.download   │
                                       └─────────────────────────────┘
         ┌──────────────────────────────────────────────────────────┐
-        │  Cross-browser platform shim (offscreen vs extension page) │
+        │  Cross-browser platform shim (downloads / proxy / storage) │
         └──────────────────────────────────────────────────────────┘
 ```
 
 </details>
 
 ### Why this architecture is fast
-- **The MV3 service worker stays thin.** All heavy work (fetch pool, decrypt, transmux, Blob assembly) runs in a long-lived DOM context — a `chrome.offscreen` document on Chromium, a hidden extension page on Firefox/Safari — that survives the SW's 30s idle recycle. Downloads can run for minutes without SW involvement.
-- **SW death is non-fatal.** Per-segment progress is checkpointed to `storage.session`; on SW wake it re-attaches to the running host.
+- **The MV3 service worker stays thin.** All heavy work (fetch pool, decrypt, transmux, Blob assembly, and `chrome.downloads`) runs in a long-lived **hidden extension page** (`download-runner.html`) on every browser. Chromium's `chrome.offscreen` documents cannot call `chrome.downloads`, so they are not used as the download host. The runner survives the SW's 30s idle recycle; downloads can run for minutes without SW involvement.
+- **SW death is non-fatal.** The SW talks to the runner over a persistent Port; per-segment progress is also checkpointed to `storage.session`. On wake the SW re-attaches to the running host.
 - **Streaming transmux.** Segments are fed to `mux.js` one at a time as they arrive in order; no full rebuffer.
 - **Bounded concurrency + backpressure.** A configurable pool fetches segments concurrently but emits them in playlist order; a byte budget prevents runaway memory on huge playlists.
-- **One engine, two hosts.** Engine code depends only on `fetch` / `crypto.subtle` / `Blob` / `URL`; host selection is a one-line feature-detect.
+- **One engine, one host.** Engine code depends only on `fetch` / `crypto.subtle` / `Blob` / `URL` / downloads; the same runner page is used on Chrome, Edge, Firefox, and Safari.
 
 ---
 
@@ -94,10 +94,10 @@
 
 | Browser | Support | Engine host |
 |---|---|---|
-| Chrome 109+ | ✅ Full | `chrome.offscreen` document |
-| Edge 109+ | ✅ Full | `chrome.offscreen` document |
-| Firefox 115+ | ✅ Full | Hidden extension page (no offscreen API) |
-| Safari 16+ | ⚠️ Best-effort | Hidden extension page (no offscreen/proxy) |
+| Chrome 109+ | ✅ Full | Hidden extension page (`download-runner`) |
+| Edge 109+ | ✅ Full | Hidden extension page (`download-runner`) |
+| Firefox 115+ | ✅ Full | Hidden extension page (`download-runner`) |
+| Safari 16+ | ⚠️ Best-effort | Hidden extension page (no proxy API) |
 
 ---
 
@@ -164,7 +164,7 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 3. Build & run → enable the extension under **Safari → Settings → Extensions**.
 4. Allow it in **Develop → [your extension]**.
 
-> Safari limitations in MVP: no proxy support, no `offscreen` (uses the hidden-page host).
+> Safari limitations in MVP: no proxy support (uses the same hidden-page download host as other browsers).
 
 ---
 
@@ -202,11 +202,11 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 |---|---|
 | `webRequest` + `host_permissions: <all_urls>` | Sniff m3u8 network requests on any site; fetch segments cross-origin without CORS. |
 | `storage` | Persist settings, history; `storage.session` for ephemeral per-tab detections. |
-| `downloads` | Hand the final file to your browser's download list. |
-| `offscreen` (Chromium only) | Host the download engine in a DOM context (Blob/URL.createObjectURL). |
+| `downloads` | Hand the final file to your browser's download list (called from the runner page). |
+| `offscreen` (Chromium only) | Declared for Chromium compatibility; the download engine itself runs in `download-runner` because offscreen documents cannot use `chrome.downloads`. |
 | `scripting` + `tabs` | On-demand DOM scan; read the active tab's URL for naming. |
 | `notifications` | Optional completion/error notifications. |
-| `proxy` (optional) | Per-extension proxy override for restricted networks. |
+| `proxy` (Chrome / Edge / Firefox) | Per-extension proxy override for restricted networks. Required permission on MV3 (Chrome omits `proxy` if listed only under `optional_permissions`). |
 
 > The `<all_urls>` permission triggers a "read and change all your data" prompt. This is unavoidable for the core feature (sniffing + downloading m3u8 from any site). The extension **never uploads** page data anywhere — see [Privacy](#-privacy).
 
@@ -224,7 +224,7 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 
 - **VOD only** in this MVP — live stream recording is planned.
 - DRM-encrypted streams cannot be decrypted; they fall back to raw `.ts` or fail with a clear message.
-- Safari: no proxy support; uses the hidden-page engine host.
+- Safari: no proxy support; same hidden-page engine host as other browsers.
 
 ---
 
@@ -248,14 +248,14 @@ src/
 │  ├─ popup/               # detected-streams popup UI
 │  ├─ options/             # settings UI
 │  ├─ download-manager/    # live + history UI
-│  ├─ offscreen/           # Chromium engine host (offscreen doc)
-│  ├─ download-runner/     # Firefox/Safari engine host (hidden page)
+│  ├─ download-runner/     # download engine host (hidden page, all browsers)
+│  ├─ offscreen/           # Chromium offscreen entry (not the download host)
 │  └─ content.ts           # on-demand DOM scanner
 ├─ lib/
 │  ├─ detection/           # webRequestObserver, urlNormalizer, qualityProbe, badge
 │  ├─ state/               # sessionStore, settingsStore, historyStore
 │  ├─ engine/              # engine, m3u8Parser, segmentPool, aesDecryptor,
-│  │                       # transmuxer, blobAssembler, hostManager, hostRuntime
+│  │                       # transmuxer, blobAssembler, hostManager, hostProtocol, hostRuntime
 │  ├─ platform/            # browser shim, featureDetect, downloadsShim, proxyShim, messaging
 │  └─ types, errors, log
 ├─ components/         # React UI (Stich-style design system)
@@ -269,7 +269,7 @@ tests/                 # engine + parser unit tests
 
 Engine internals are unit-tested with Vitest:
 - `tests/m3u8Parser.test.ts` — master/media playlists, AES-128 keys, byteranges, init segments.
-- `tests/urlNormalizer.test.ts` — m3u8 detection, URL normalization, filename derivation.
+- `tests/urlNormalizer.test.ts` — m3u8 detection, wrapper `?url=` unwrap, URL normalization, filename derivation.
 - `tests/aesDecryptor.test.ts` — IV derivation, decryptor passthrough/error paths.
 
 ```bash
@@ -280,4 +280,4 @@ npm test
 
 ## 📄 License
 
-MIT © Sniffls contributors.
+MIT © [contributors](https://github.com/nuoyax/sniff-hls/graphs/contributors).

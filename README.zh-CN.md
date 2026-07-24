@@ -16,7 +16,7 @@
 <p align="center">
 <!-- 将下方的 {repo} 替换为你的 GitHub 仓库地址，例如 https://github.com/user/sniff-hls -->
   <a href="{repo}/stargazers"><img alt="GitHub stars" src="https://img.shields.io/badge/⭐-在_GitHub_点星-4f46e5?style=for-the-badge"></a>
-  <a href="https://paypal.me/halo651891"><img alt="PayPal 捐款" src="https://img.shields.io/badge/💛-PayPal_捐款-0070ba?style=for-the-badge"></a>
+  <a href="https://paypal.me/halo651891"><img alt="PayPal 捐款" src="https://img.shields.io/badge/PayPal_捐款-0070ba?style=for-the-badge&logo=paypal&logoColor=white"></a>
   <a href="#-许可证"><img alt="许可证: MIT" src="https://img.shields.io/badge/许可证-MIT-22c55e?style=for-the-badge"></a>
 </p>
 
@@ -28,7 +28,7 @@
 
 ## ✨ 功能特性
 
-- **自动检测**：通过 `webRequest` 网络嗅探 + 按需 DOM 扫描，识别任意页面的 m3u8。
+- **自动检测**：通过 `webRequest` 网络嗅探 + 按需 DOM 扫描，识别任意页面的 m3u8——包括把真实播放列表藏在 `?url=` 查询参数里的包装页。
 - **下载为 MP4**：用 `mux.js` 将 `.ts` 分片转封装为 fMP4（不重编码，快）。**自动降级为 `.ts`**：当流用了不支持的加密方式或异常编码时。
 - **AES-128 解密**：基于 WebCrypto（显式 IV 或按 RFC 8216 序号派生 IV）。
 - **清晰度选择**：列出 master playlist 的所有档位；默认最高码率。
@@ -75,18 +75,18 @@
                                       │  chrome.downloads.download   │
                                       └─────────────────────────────┘
         ┌──────────────────────────────────────────────────────────┐
-        │  跨浏览器平台 shim (offscreen vs 扩展页宿主)                 │
+        │  跨浏览器平台 shim（downloads / proxy / storage）           │
         └──────────────────────────────────────────────────────────┘
 ```
 
 </details>
 
 ### 为什么这个架构性能更好
-- **MV3 Service Worker 保持轻量。** 所有重活（分片池、解密、转封装、Blob 拼接）跑在长生命周期的 DOM 上下文里——Chromium 用 `chrome.offscreen` 文档，Firefox/Safari 用隐藏扩展页——它们不受 SW 30 秒空闲回收影响。下载可持续数分钟而无需 SW 参与。
-- **SW 挂掉也能恢复。** 每分片进度落 `storage.session`，SW 唤醒后重连运行中的宿主。
+- **MV3 Service Worker 保持轻量。** 所有重活（分片池、解密、转封装、Blob 拼接，以及调用 `chrome.downloads`）跑在各浏览器统一的长生命周期**隐藏扩展页**（`download-runner.html`）里。Chromium 的 `chrome.offscreen` 文档**不能**调用 `chrome.downloads`，因此不用作下载宿主。runner 不受 SW 30 秒空闲回收影响；下载可持续数分钟而无需 SW 参与。
+- **SW 挂掉也能恢复。** SW 通过持久 Port 与 runner 通信；每分片进度也会落 `storage.session`。SW 唤醒后重连运行中的宿主。
 - **流式转封装。** 分片按序到达即喂给 `mux.js`，逐片处理，无需全量缓冲。
 - **有界并发 + 背压。** 可配并发池并行拉取，但按播放列表顺序产出；字节预算防止超大播放列表内存爆涨。
-- **一套引擎，两个宿主。** 引擎代码只依赖 `fetch` / `crypto.subtle` / `Blob` / `URL`；宿主选择是运行时一行 feature-detect。
+- **一套引擎，一个宿主。** 引擎代码只依赖 `fetch` / `crypto.subtle` / `Blob` / `URL` / downloads；Chrome、Edge、Firefox、Safari 共用同一 runner 页。
 
 ---
 
@@ -94,10 +94,10 @@
 
 | 浏览器 | 支持 | 引擎宿主 |
 |---|---|---|
-| Chrome 109+ | ✅ 完整 | `chrome.offscreen` 文档 |
-| Edge 109+ | ✅ 完整 | `chrome.offscreen` 文档 |
-| Firefox 115+ | ✅ 完整 | 隐藏扩展页（无 offscreen API） |
-| Safari 16+ | ⚠️ 尽力而为 | 隐藏扩展页（无 offscreen/proxy） |
+| Chrome 109+ | ✅ 完整 | 隐藏扩展页（`download-runner`） |
+| Edge 109+ | ✅ 完整 | 隐藏扩展页（`download-runner`） |
+| Firefox 115+ | ✅ 完整 | 隐藏扩展页（`download-runner`） |
+| Safari 16+ | ⚠️ 尽力而为 | 隐藏扩展页（无 proxy API） |
 
 ---
 
@@ -164,7 +164,7 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 3. 构建并运行 → 在 **Safari → 设置 → 扩展** 中启用。
 4. 在 **开发 → [你的扩展]** 中允许。
 
-> Safari 在 MVP 的限制：无代理支持，无 `offscreen`（用隐藏页宿主）。
+> Safari 在 MVP 的限制：无代理支持（下载宿主与其他浏览器相同，均为隐藏页）。
 
 ---
 
@@ -202,11 +202,11 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 |---|---|
 | `webRequest` + `host_permissions: <all_urls>` | 嗅探任意站点的 m3u8 网络请求；跨域拉取分片（免 CORS）。 |
 | `storage` | 持久化设置/历史；`storage.session` 存每 tab 临时检测。 |
-| `downloads` | 将最终文件交给浏览器下载列表。 |
-| `offscreen`（仅 Chromium） | 在 DOM 上下文承载下载引擎（Blob/URL.createObjectURL）。 |
+| `downloads` | 将最终文件交给浏览器下载列表（在 runner 页内调用）。 |
+| `offscreen`（仅 Chromium） | 为 Chromium 兼容性声明；下载引擎实际跑在 `download-runner`——offscreen 文档无法使用 `chrome.downloads`。 |
 | `scripting` + `tabs` | 按需 DOM 扫描；读取当前 tab URL 用于命名。 |
 | `notifications` | 可选的完成/失败通知。 |
-| `proxy`（可选） | 受限网络下每扩展独立的代理覆盖。 |
+| `proxy`（Chrome / Edge / Firefox） | 受限网络下每扩展独立的代理覆盖。MV3 下为正式权限（仅写在 `optional_permissions` 时 Chrome 会忽略 `proxy`）。 |
 
 > `<all_urls>` 会触发"读取和更改你所有数据"提示。这是核心功能（嗅探 + 下载任意站点的 m3u8）不可避免的。本扩展**绝不上传**任何页面数据——见[隐私](#-隐私)。
 
@@ -224,7 +224,7 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 
 - MVP **仅支持点播（VOD）**——直播录制后续规划。
 - DRM 加密流无法解密；将降级为原始 `.ts` 或明确报错。
-- Safari：无代理支持；使用隐藏页引擎宿主。
+- Safari：无代理支持；与其他浏览器相同，使用隐藏页引擎宿主。
 
 ---
 
@@ -248,14 +248,14 @@ src/
 │  ├─ popup/               # 检测流弹窗 UI
 │  ├─ options/             # 设置 UI
 │  ├─ download-manager/    # 实时 + 历史 UI
-│  ├─ offscreen/           # Chromium 引擎宿主（offscreen 文档）
-│  ├─ download-runner/     # Firefox/Safari 引擎宿主（隐藏页）
+│  ├─ download-runner/     # 下载引擎宿主（隐藏页，全浏览器）
+│  ├─ offscreen/           # Chromium offscreen 入口（非下载宿主）
 │  └─ content.ts           # 按需 DOM 扫描器
 ├─ lib/
 │  ├─ detection/           # webRequestObserver, urlNormalizer, qualityProbe, badge
 │  ├─ state/               # sessionStore, settingsStore, historyStore
 │  ├─ engine/              # engine, m3u8Parser, segmentPool, aesDecryptor,
-│  │                       # transmuxer, blobAssembler, hostManager, hostRuntime
+│  │                       # transmuxer, blobAssembler, hostManager, hostProtocol, hostRuntime
 │  ├─ platform/            # browser shim, featureDetect, downloadsShim, proxyShim, messaging
 │  └─ types, errors, log
 ├─ components/         # React UI（Stich 风格设计系统）
@@ -269,7 +269,7 @@ tests/                 # 引擎 + 解析器单元测试
 
 引擎核心用 Vitest 做单元测试：
 - `tests/m3u8Parser.test.ts` — master/media 播放列表、AES-128 密钥、字节范围、init segment。
-- `tests/urlNormalizer.test.ts` — m3u8 识别、URL 归一化、文件名派生。
+- `tests/urlNormalizer.test.ts` — m3u8 识别、包装 `?url=` 解包、URL 归一化、文件名派生。
 - `tests/aesDecryptor.test.ts` — IV 派生、解密器直通/报错路径。
 
 ```bash
@@ -280,4 +280,4 @@ npm test
 
 ## 📄 许可证
 
-MIT © Sniffls 贡献者。
+MIT © [贡献者](https://github.com/nuoyax/sniff-hls/graphs/contributors)。
