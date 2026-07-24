@@ -24,32 +24,99 @@ export default function App() {
   const [autoDetect, setAutoDetect] = useState(true);
   const [active, setActive] = useState<Record<string, ActiveDownload>>({});
   const [loading, setLoading] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const tab = await getCurrentTab();
-      if (!tab?.id) {
-        setLoading(false);
-        return;
+      try {
+        const tab = await getCurrentTab();
+        if (!tab?.id) {
+          // Not running as an installed extension popup (e.g. opened HTML directly).
+          setBootError('无法获取当前标签页。请从 chrome://extensions 加载扩展后，再点工具栏图标打开。');
+          return;
+        }
+        setTabId(tab.id);
+        setPageUrl(tab.url);
+        // Fetch the page title from the SW for a sensible default filename.
+        // Timeout: if the service worker never responds, don't spin forever.
+        const info = await withTimeout(
+          sendMessage({ type: 'GET_TAB_INFO', tabId: tab.id }),
+          5000,
+          'Background 无响应（service worker 可能未启动）',
+        );
+        if (cancelled) return;
+        if (info.ok && info.data) {
+          const t = info.data as { title?: string; url?: string };
+          setPageTitle(t.title);
+        } else if (tab.title) {
+          setPageTitle(tab.title);
+        }
+        await withTimeout(refresh(tab.id), 5000, '获取检测列表超时');
+      } catch (e) {
+        if (!cancelled) {
+          setBootError((e as Error).message || String(e));
+          // Fall back to tab title from tabs API if SW is down.
+          try {
+            const tab = await getCurrentTab();
+            if (tab?.title) setPageTitle(tab.title);
+            if (tab?.id) setTabId(tab.id);
+            if (tab?.url) setPageUrl(tab.url);
+          } catch {
+            /* ignore */
+          }
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setTabId(tab.id);
-      setPageUrl(tab.url);
-      // Fetch the page title from the SW for a sensible default filename.
-      const info = await sendMessage({ type: 'GET_TAB_INFO', tabId: tab.id });
-      if (info.ok && info.data) {
-        const t = info.data as { title?: string; url?: string };
-        setPageTitle(t.title);
-      } else if (tab.title) {
-        setPageTitle(tab.title);
-      }
-      await refresh(tab.id);
-      setLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const refresh = useCallback(async (tid: number) => {
     const res = await sendMessage({ type: 'GET_DETECTIONS', tabId: tid });
     if (res.ok && Array.isArray(res.data)) setDetections(res.data as DetectedItem[]);
+  }, []);
+
+  // Keep popup download badges in sync with the SW (ports alone miss jobs
+  // started while the popup was closed, or when a port disconnects).
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await sendMessage({ type: 'GET_ACTIVE' });
+        if (!alive || !res.ok || !res.data) return;
+        const map = res.data as Record<
+          string,
+          { url: string; status: DownloadProgress['status']; done: number; total: number; format?: OutputFormat }
+        >;
+        setActive((prev) => {
+          const next: Record<string, ActiveDownload> = { ...prev };
+          for (const [jobId, j] of Object.entries(map)) {
+            if (!j?.url) continue;
+            const ratio = j.total > 0 ? j.done / j.total : next[j.url]?.ratio ?? 0;
+            next[j.url] = {
+              jobId,
+              status: j.status,
+              ratio,
+              format: j.format ?? next[j.url]?.format,
+              error: next[j.url]?.error,
+            };
+          }
+          return next;
+        });
+      } catch {
+        /* SW may be restarting */
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, []);
 
   const onScan = useCallback(async () => {
@@ -98,6 +165,16 @@ export default function App() {
             [url]: { jobId, status: p.status, ratio, format: p.outputFormat, error: p.error },
           }));
         });
+      } else {
+        setActive((a) => ({
+          ...a,
+          [url]: {
+            jobId: '',
+            status: 'error',
+            ratio: 0,
+            error: res.error || 'Failed to start download',
+          },
+        }));
       }
     },
     [tabId, pageUrl, pageTitle],
@@ -116,6 +193,11 @@ export default function App() {
 
   return (
     <div className="flex flex-col">
+      {bootError && (
+        <div className="border-b border-danger/30 bg-danger/5 px-4 py-2 text-[11px] text-danger">
+          {bootError}
+        </div>
+      )}
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-fg">Sniffls</span>
@@ -321,7 +403,28 @@ function hostOf(url: string): string {
 }
 
 async function getCurrentTab(): Promise<{ id?: number; url?: string; title?: string } | null> {
-  const b = (typeof browser !== 'undefined' ? browser : chrome) as any;
-  const [tab] = await b.tabs.query({ active: true, currentWindow: true });
-  return tab || null;
+  const b = (typeof browser !== 'undefined' ? browser : typeof chrome !== 'undefined' ? chrome : null) as any;
+  if (!b?.tabs?.query) return null;
+  try {
+    const [tab] = await b.tabs.query({ active: true, currentWindow: true });
+    return tab || null;
+  } catch {
+    return null;
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
 }

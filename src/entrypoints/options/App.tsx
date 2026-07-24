@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/Button';
-import { getSettings, setSettings, subscribeSettings, type Settings } from '@/lib/state/settingsStore';
+import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS, type Settings } from '@/lib/state/settingsStore';
 import { sendMessage } from '@/lib/platform/messaging';
 import type { ProxyConfig } from '@/lib/platform/proxyShim';
 import type { OutputFormat } from '@/lib/types';
@@ -9,16 +9,30 @@ export default function App() {
   const [s, setS] = useState<Settings | null>(null);
   const [proxyMsg, setProxyMsg] = useState('');
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     let unsub = () => {};
-    getSettings().then((v) => {
-      setS(v);
-      unsub = subscribeSettings((next) => setS({ ...next }));
-    });
+    getSettings()
+      .then((v) => {
+        setS(v);
+        unsub = subscribeSettings((next) => setS({ ...next }));
+      })
+      .catch((e) => {
+        setLoadError((e as Error).message || String(e));
+        // Still render defaults so the page is usable outside a broken storage context.
+        setS({ ...DEFAULT_SETTINGS });
+      });
     return () => unsub();
   }, []);
 
-  if (!s) return <div className="p-8 text-fg-muted">Loading…</div>;
+  if (!s) {
+    return (
+      <div className="p-8 text-fg-muted">
+        {loadError ? `Failed to load settings: ${loadError}` : 'Loading…'}
+      </div>
+    );
+  }
 
   const update = (patch: Partial<Settings>) => setSettings(patch);
 

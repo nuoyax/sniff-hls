@@ -109,6 +109,8 @@ export interface DownloadJob {
   concurrency: number;
   /** Suggested filename without extension. */
   baseFilename: string;
+  /** Full relative path for chrome.downloads (may include subfolder + ext). */
+  filename?: string;
   /** Originating tab. */
   tabId?: number;
 }
