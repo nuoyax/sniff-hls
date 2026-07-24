@@ -14,6 +14,8 @@ export default defineContentScript({
           __content_scan: true,
           urls,
           pageUrl: location.href,
+        }).catch(() => {
+          /* SW may be restarting */
         });
       }
     } catch {

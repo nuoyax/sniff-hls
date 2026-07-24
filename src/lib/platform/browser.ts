@@ -5,30 +5,63 @@
 import { capabilities } from './featureDetect';
 
 declare const browser: any;
+declare const chrome: any;
 
+/**
+ * Resolve the WebExtension API object.
+ * Prefer whichever global actually exposes `storage.local` — a partial
+ * `browser` global (runtime only) would otherwise crash on `storage.local`.
+ */
 export function getBrowser(): any {
-  if (typeof browser !== 'undefined') return browser;
-  if (typeof chrome !== 'undefined') return chrome;
+  const g = globalThis as any;
+  const candidates = [g.chrome, g.browser, typeof chrome !== 'undefined' ? chrome : null, typeof browser !== 'undefined' ? browser : null].filter(
+    (x) => x && typeof x === 'object',
+  );
+
+  for (const api of candidates) {
+    if (api.storage?.local) return api;
+  }
+  for (const api of candidates) {
+    if (api.runtime?.id) return api;
+  }
+  if (candidates[0]) return candidates[0];
   throw new Error('No WebExtension runtime');
 }
 
-export const bapi = getBrowser();
+/** Lazy API handle — always re-check so a partial first resolve can recover. */
+export const bapi: any = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      const api = getBrowser();
+      const val = api[prop as string];
+      return typeof val === 'function' ? val.bind(api) : val;
+    },
+  },
+);
 
 type Area = 'local' | 'session' | 'sync';
 type Changes = Record<string, { oldValue?: any; newValue?: any }>;
 
 function areaOf(area: Area): any {
+  const api = getBrowser();
   if (area === 'session' && !capabilities.storageSession) {
     // Emulate session with a local namespace.
     return wrapLocalNamespace('session:');
   }
-  return bapi.storage[area];
+  const store = api.storage?.[area];
+  if (!store) {
+    throw new Error(
+      `storage.${area} is unavailable. Reload the extension and ensure the "storage" permission is granted.`,
+    );
+  }
+  return store;
 }
 
 function wrapLocalNamespace(prefix: string) {
   return {
     async get(keys: string | string[] | Record<string, any> | null) {
-      const all = (await bapi.storage.local.get(null)) || {};
+      const all = (await getBrowser().storage.local.get(null)) || {};
       const out: Record<string, any> = {};
       for (const k of Object.keys(all)) {
         if (k.startsWith(prefix)) out[k.slice(prefix.length)] = all[k];
@@ -47,22 +80,30 @@ function wrapLocalNamespace(prefix: string) {
     async set(items: Record<string, any>) {
       const mapped: Record<string, any> = {};
       for (const k of Object.keys(items)) mapped[prefix + k] = items[k];
-      await bapi.storage.local.set(mapped);
+      await getBrowser().storage.local.set(mapped);
     },
     async remove(keys: string | string[]) {
       const arr = Array.isArray(keys) ? keys : [keys];
-      await bapi.storage.local.remove(arr.map((k) => prefix + k));
+      await getBrowser().storage.local.remove(arr.map((k) => prefix + k));
     },
   };
 }
 
 export const storage = {
-  local: areaOf('local'),
-  session: areaOf('session'),
-  sync: areaOf('sync'),
+  // Lazy getters — never touch storage at module-eval time (SW / UI race).
+  get local() {
+    return areaOf('local');
+  },
+  get session() {
+    return areaOf('session');
+  },
+  get sync() {
+    return areaOf('sync');
+  },
 
   /** Subscribe to storage changes for a given area. Returns an unsubscribe fn. */
   onChanged(area: Area, cb: (changes: Changes, ns: string) => void): () => void {
+    const api = getBrowser();
     const listener = (changes: Changes, ns: string) => {
       if (area === 'session' && !capabilities.storageSession) {
         if (ns !== 'local') return;
@@ -78,7 +119,7 @@ export const storage = {
       if (ns !== area) return;
       cb(changes, ns);
     };
-    bapi.storage.onChanged.addListener(listener);
-    return () => bapi.storage.onChanged.removeListener(listener);
+    api.storage.onChanged.addListener(listener);
+    return () => api.storage.onChanged.removeListener(listener);
   },
 };

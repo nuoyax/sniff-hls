@@ -105,6 +105,11 @@ export default function App() {
                   <p className="truncate font-mono text-[11px] text-fg-muted" title={h.url}>
                     {h.url} · {formatBytes(h.sizeBytes)} · {formatTime(h.completedAt || h.startedAt)}
                   </p>
+                  {h.status === 'error' && h.error && (
+                    <p className="mt-1 truncate text-[11px] text-danger" title={h.error}>
+                      {h.error}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Badge

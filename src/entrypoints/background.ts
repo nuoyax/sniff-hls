@@ -8,13 +8,13 @@ import { bapi } from '@/lib/platform/browser';
 import { capabilities } from '@/lib/platform/featureDetect';
 import { storage } from '@/lib/platform/browser';
 import { registerMessageHandler, onProgressPort, type Request, type Response } from '@/lib/platform/messaging';
-import { isM3u8Url, isHlsContentType, normalizeUrl, deriveBaseFilename } from '@/lib/detection/urlNormalizer';
+import { isM3u8Url, isHlsContentType, normalizeUrl, deriveBaseFilename, extractM3u8Url } from '@/lib/detection/urlNormalizer';
 import { probeVariants } from '@/lib/detection/masterQualityProbe';
 import { getDetections, addDetection, clearTab } from '@/lib/state/sessionStore';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS } from '@/lib/state/settingsStore';
 import { addHistory, updateHistory, listHistory } from '@/lib/state/historyStore';
 import { setBadge, clearBadge, type BadgeState } from '@/lib/detection/badge';
-import { ensureHost } from '@/lib/engine/hostManager';
+import { ensureHost, markHostReady, sendToHost, setupHostPort } from '@/lib/engine/hostManager';
 import { applyProxy, clearProxy } from '@/lib/platform/proxyShim';
 import { sanitizeFilename } from '@/lib/platform/downloadsShim';
 import { DownloadEngine } from '@/lib/engine/engine';
@@ -26,6 +26,8 @@ import type { DownloadJob, DownloadProgress, HistoryEntry } from '@/lib/types';
 
 export default defineBackground(() => {
   // ---- init ----
+  // Host port must be wired before ensureHost / downloads.
+  setupHostPort(handleHostMessage);
   void bootstrap();
 
   subscribeSettings(async (s) => {
@@ -54,7 +56,6 @@ export default defineBackground(() => {
   registerMessageHandler(handleMessage);
 
   // ---- streaming progress ports (host → SW → UI) ----
-  // The host posts progress to the SW; the SW fans out to any connected UI port.
   setupProgressFanout();
 
   // ---- host → SW messages (engine lifecycle) + content scan relay ----
@@ -64,7 +65,6 @@ export default defineBackground(() => {
       return undefined;
     }
     if (msg && msg.__content_scan === true) {
-      // Content script found m3u8 URLs via DOM; record them for this tab.
       const tabId = sender?.tab?.id;
       if (typeof tabId === 'number' && Array.isArray(msg.urls)) {
         for (const url of msg.urls) {
@@ -113,20 +113,30 @@ function onResponseStarted(details: { tabId: number; url: string; statusCode: nu
 async function recordDetection(tabId: number, url: string, source: 'network' | 'dom') {
   const s = await getSettings();
   if (!s.autoDetect && source === 'network') return;
+  // Unwrap player proxies like /m3u8/?url=https%3A%2F%2Fcdn%2Findex.m3u8
+  const real = extractM3u8Url(url) || url;
   const pageUrl = await safeTabUrl(tabId);
   const { added, list } = await addDetection(tabId, {
-    url,
+    url: real,
+    originalUrl: real === url ? undefined : url,
     source,
     detectedAt: Date.now(),
     pageUrl,
   });
   if (added) {
-    log.debug('detected', url);
+    log.debug('detected', real, real !== url ? `(from ${url})` : '');
     refreshBadge(tabId, list.length);
     // Probe quality in the background; update the stored item.
-    probeVariants(url).then((variants) => {
+    probeVariants(real).then((variants) => {
       if (!variants.length) return;
-      void addDetection(tabId, { url, source, detectedAt: Date.now(), variants, isMaster: variants.length > 1, pageUrl });
+      void addDetection(tabId, {
+        url: real,
+        source,
+        detectedAt: Date.now(),
+        variants,
+        isMaster: variants.length > 1,
+        pageUrl,
+      });
       refreshBadge(tabId);
     });
   }
@@ -255,6 +265,7 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
     format: req.payload.format === 'auto' ? s.format : req.payload.format,
     concurrency: s.concurrency,
     baseFilename,
+    filename: fullFilename,
     pageUrl: req.payload.pageUrl,
     tabId: req.payload.tabId,
   };
@@ -315,10 +326,16 @@ function cancelJob(jobId: string) {
 // host context. The SW sends a RUN_JOB message to the host; the host boots
 // DownloadEngine, streams progress back to the SW, builds the Blob, calls
 // chrome.downloads, and reports completion. The SW then updates history + UI.
-async function runJobInHost(job: DownloadJob, active: ActiveJob): Promise<void> {
-  await ensureHost();
+async function runJobInHost(job: DownloadJob, _active: ActiveJob): Promise<void> {
   // Ask the host to run the job. The host will post __host progress messages.
-  bapi.runtime.sendMessage({ __host: true, kind: 'RUN_JOB', job });
+  try {
+    await sendToHost({ __host: true, kind: 'RUN_JOB', job });
+  } catch (e) {
+    const message = (e as Error).message || String(e);
+    log.error('job run failed', e);
+    onHostError(job.id, { code: 'HOST', message });
+    throw e;
+  }
 }
 
 function handleHostMessage(msg: any) {
@@ -329,6 +346,7 @@ function handleHostMessage(msg: any) {
   } else if (msg.kind === 'ERROR') {
     onHostError(msg.jobId, msg.error);
   } else if (msg.kind === 'HOST_READY') {
+    markHostReady();
     log.info('host ready', msg.host);
   }
 }

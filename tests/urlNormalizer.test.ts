@@ -5,6 +5,7 @@ import {
   normalizeUrl,
   resolveUrl,
   deriveBaseFilename,
+  extractM3u8Url,
 } from '../src/lib/detection/urlNormalizer';
 
 describe('isM3u8Url', () => {
@@ -17,6 +18,26 @@ describe('isM3u8Url', () => {
     expect(isM3u8Url('https://x.com/a/b.ts')).toBe(false);
     expect(isM3u8Url('https://x.com/a/bmp4')).toBe(false);
     expect(isM3u8Url('')).toBe(false);
+  });
+  it('recognizes wrapper pages that embed a playlist in ?url=', () => {
+    const wrapped =
+      'https://www.gszyv.com/m3u8/?url=https%3A%2F%2Fv.gsuus.com%2Fplay%2Fxkazm8eJ%2Findex.m3u8';
+    expect(isM3u8Url(wrapped)).toBe(true);
+  });
+});
+
+describe('extractM3u8Url', () => {
+  it('returns direct playlist URLs unchanged', () => {
+    const u = 'https://v.gsuus.com/play/xkazm8eJ/index.m3u8';
+    expect(extractM3u8Url(u)).toBe(u);
+  });
+  it('unwraps ?url= encoded playlist from player proxy pages', () => {
+    const wrapped =
+      'https://www.gszyv.com/m3u8/?url=https%3A%2F%2Fv.gsuus.com%2Fplay%2Fxkazm8eJ%2Findex.m3u8';
+    expect(extractM3u8Url(wrapped)).toBe('https://v.gsuus.com/play/xkazm8eJ/index.m3u8');
+  });
+  it('returns null for unrelated pages', () => {
+    expect(extractM3u8Url('https://example.com/watch?v=1')).toBeNull();
   });
 });
 

@@ -1,76 +1,159 @@
-// Engine host abstraction. The engine logic (lib/engine/engine.ts) is the same
-// everywhere; only the *host* (where fetch/Blob/URL live) differs:
-//   - Chromium 109+/Edge: chrome.offscreen document
-//   - Firefox / Safari / older: hidden extension page (download-runner.html)
-//
-// SW ↔ host communicate over runtime ports. The host boots the DownloadEngine,
-// runs a job, creates the Blob URL, and hands it to chrome.downloads — all
-// inside the DOM context where those APIs exist.
+// Engine host abstraction: hidden extension page (download-runner.html).
+// chrome.offscreen cannot call chrome.downloads, so we always use the runner page.
 import { bapi } from '../platform/browser';
-import { capabilities } from '../platform/featureDetect';
 import log from '../log';
+import { HOST_PORT_PREFIX } from './hostProtocol';
 
-const OFFSCREEN_URL = 'offscreen.html';
 const RUNNER_URL = 'download-runner.html';
-const OFFSCREEN_REASON = 'Fetch, decrypt, and transmux m3u8 segments and assemble a Blob for download.';
 
 let ensuring: Promise<void> | null = null;
+let readyResolve: (() => void) | null = null;
+let readyPromise: Promise<void> | null = null;
+let hostIsReady = false;
+let hostPort: any = null;
+let runnerTabId: number | null = null;
+let portListenerAttached = false;
+let hostMsgHandler: ((msg: any) => void) | null = null;
 
-/** True if this build/runtime can use chrome.offscreen. */
-export function prefersOffscreen(): boolean {
-  return capabilities.offscreen;
+function armReadyWait(): Promise<void> {
+  if (hostIsReady && hostPort) return Promise.resolve();
+  if (readyPromise) return readyPromise;
+  readyPromise = new Promise<void>((resolve) => {
+    readyResolve = resolve;
+  });
+  return readyPromise;
 }
 
-/** Ensure the engine host document/page exists. Idempotent. */
-export async function ensureHost(): Promise<void> {
-  if (ensuring) return ensuring;
-  ensuring = (async () => {
-    try {
-      if (prefersOffscreen()) {
-        await ensureOffscreen();
-      } else {
-        await ensureRunnerPage();
+function clearReadyFlag(): void {
+  hostIsReady = false;
+  readyPromise = null;
+  readyResolve = null;
+}
+
+/** Called when the host port announces HOST_READY (or reconnects). */
+export function markHostReady(): void {
+  hostIsReady = true;
+  readyResolve?.();
+  readyResolve = null;
+  readyPromise = null;
+}
+
+export function prefersOffscreen(): boolean {
+  return false;
+}
+
+function ensurePortListener(): void {
+  if (portListenerAttached) return;
+  portListenerAttached = true;
+  bapi.runtime.onConnect.addListener((port: any) => {
+    if (!String(port.name || '').startsWith(HOST_PORT_PREFIX)) return;
+    log.info('host port connected', port.name);
+    hostPort = port;
+    markHostReady();
+
+    port.onMessage.addListener((msg: any) => {
+      if (msg?.kind === 'HOST_READY') {
+        markHostReady();
+        log.info('host ready', msg.host);
+        return;
       }
-    } catch (e) {
-      log.error('ensure host failed', e);
-      // If offscreen path errored, fall back to runner page.
-      if (prefersOffscreen()) {
+      // Normalize to the same shape handleHostMessage expects.
+      hostMsgHandler?.({ __host: true, ...msg });
+    });
+
+    port.onDisconnect.addListener(() => {
+      log.warn('host port disconnected');
+      if (hostPort === port) hostPort = null;
+      clearReadyFlag();
+    });
+  });
+}
+
+/** Wire SW-side host port handling. Call once from background bootstrap. */
+export function setupHostPort(onHostMsg: (msg: any) => void): void {
+  hostMsgHandler = onHostMsg;
+  ensurePortListener();
+}
+
+export async function ensureHost(opts?: { recreate?: boolean }): Promise<void> {
+  ensurePortListener();
+
+  if (opts?.recreate) {
+    await tearDownHost();
+    clearReadyFlag();
+    ensuring = null;
+  }
+
+  if (!ensuring) {
+    ensuring = (async () => {
+      try {
+        await ensureRunnerPage();
+      } catch (e) {
+        log.error('ensure host failed', e);
+      }
+    })().finally(() => {
+      if (!hostIsReady) ensuring = null;
+    });
+  }
+  await ensuring;
+
+  try {
+    await Promise.race([
+      armReadyWait(),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error('host ready timeout')), 10000),
+      ),
+    ]);
+  } catch (e) {
+    log.warn('host ready wait failed', e);
+    ensuring = null;
+  }
+}
+
+async function tearDownHost(): Promise<void> {
+  try {
+    hostPort?.disconnect?.();
+  } catch {
+    /* noop */
+  }
+  hostPort = null;
+
+  try {
+    const tabs = await bapi.tabs.query({ url: bapi.runtime.getURL(RUNNER_URL) });
+    for (const t of tabs || []) {
+      if (t.id != null) {
         try {
-          await ensureRunnerPage();
-        } catch (e2) {
-          log.error('runner fallback also failed', e2);
+          await bapi.tabs.remove(t.id);
+        } catch {
+          /* noop */
         }
       }
     }
-  })();
-  return ensuring;
-}
-
-async function ensureOffscreen(): Promise<void> {
-  const existing = await bapi.offscreen.hasDocument?.();
-  if (existing) return;
-  try {
-    await bapi.offscreen.createDocument({
-      url: OFFSCREEN_URL,
-      reasons: ['BLOBS', 'DOM_PARSER'],
-      justification: OFFSCREEN_REASON,
-    });
-    log.info('offscreen document created');
-  } catch (e: any) {
-    // "only a single offscreen" / already exists races → ignore those.
-    if (String(e?.message || e).includes('Only a single offscreen')) return;
-    throw e;
+  } catch (e) {
+    log.warn('close runner tabs failed', e);
   }
+  runnerTabId = null;
 }
 
-let runnerTabId: number | null = null;
 async function ensureRunnerPage(): Promise<void> {
-  // Reuse an existing runner tab if present.
   const tabs = await bapi.tabs.query({ url: bapi.runtime.getURL(RUNNER_URL) });
-  if (tabs && tabs.length) {
+  if (tabs && tabs.length && hostPort) {
     runnerTabId = tabs[0].id;
     return;
   }
+  // Stale runner tab without a live port → close and recreate.
+  if (tabs && tabs.length) {
+    for (const t of tabs) {
+      if (t.id != null) {
+        try {
+          await bapi.tabs.remove(t.id);
+        } catch {
+          /* noop */
+        }
+      }
+    }
+  }
+  clearReadyFlag();
   const tab = await bapi.tabs.create({ url: bapi.runtime.getURL(RUNNER_URL), active: false });
   runnerTabId = tab.id;
   log.info('runner page created', runnerTabId);
@@ -80,7 +163,26 @@ export function getRunnerTabId(): number | null {
   return runnerTabId;
 }
 
-/** Send a command to the engine host via messaging (runtime.sendMessage). */
+function isNoReceiver(e: unknown): boolean {
+  const msg = String((e as Error)?.message || e);
+  return /Receiving end does not exist|Could not establish connection|host ready timeout|no host port/i.test(msg);
+}
+
+/** Send a command to the engine host via the long-lived port (with recreate+retry). */
 export async function sendToHost(msg: unknown): Promise<unknown> {
-  return bapi.runtime.sendMessage(msg);
+  await ensureHost();
+  let lastErr: unknown;
+  for (let i = 0; i < 3; i++) {
+    try {
+      if (!hostPort) throw new Error('no host port');
+      hostPort.postMessage(msg);
+      return { ok: true };
+    } catch (e) {
+      lastErr = e;
+      if (!isNoReceiver(e)) throw e;
+      log.warn('sendToHost failed, recreating host', e);
+      await ensureHost({ recreate: true });
+    }
+  }
+  throw lastErr;
 }

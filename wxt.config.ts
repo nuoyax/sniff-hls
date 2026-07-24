@@ -33,6 +33,9 @@ export default defineConfig({
     ];
     // chrome.offscreen exists on Chromium 109+/Edge; absent on Firefox/Safari.
     if (isChromium) permissions.push('offscreen');
+    // Chrome MV3 rejects `proxy` in optional_permissions ("will be omitted").
+    // Put it in required permissions for Chromium/Firefox; Safari has no proxy API.
+    if (!isSafari) permissions.push('proxy');
 
     const manifest: Record<string, unknown> = {
       name: 'Sniffls',
@@ -41,7 +44,6 @@ export default defineConfig({
       version: pkg.version,
       permissions,
       host_permissions: ['<all_urls>'],
-      optional_permissions: ['proxy'],
       // Background SW type:module only applies to Chromium MV3.
       background: isChromium
         ? { service_worker: 'background.js', type: 'module' }
@@ -59,14 +61,6 @@ export default defineConfig({
           strict_min_version: '115.0',
         },
       };
-    }
-
-    // Safari has no offscreen and no proxy; uses the hidden-page engine host.
-    // No additional manifest fields needed beyond the shared set.
-    if (isSafari) {
-      // Safari rejects optional_permissions it doesn't understand; proxy is
-      // unsupported, so drop it.
-      manifest.optional_permissions = [];
     }
 
     return manifest;

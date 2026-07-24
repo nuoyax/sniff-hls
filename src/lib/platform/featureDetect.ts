@@ -6,23 +6,22 @@ export type BrowserTarget = 'chrome' | 'firefox' | 'safari' | 'edge' | 'unknown'
 declare const browser: any;
 
 function getApi(): any {
-  // WXT injects a `browser` global (webextension-polyfill style) in all contexts.
-  if (typeof browser !== 'undefined') return browser;
-  if (typeof chrome !== 'undefined') return chrome;
-  return {};
+  const g = globalThis as any;
+  // Prefer chrome/browser that actually has extension APIs — never return {}.
+  if (g.chrome?.runtime) return g.chrome;
+  if (g.browser?.runtime) return g.browser;
+  if (typeof chrome !== 'undefined' && chrome?.runtime) return chrome;
+  if (typeof browser !== 'undefined' && browser?.runtime) return browser;
+  return g.chrome || g.browser || {};
 }
 
 const api = getApi();
 
 export const target: BrowserTarget = (() => {
-  // WXT sets import.meta.env.BROWSER per build target — use it as the source
-  // of truth so each build artifact reports the correct target (rather than
-  // sniffing navigator.userAgent, which is unreliable inside extensions).
-  const envBrowser =
-    (typeof import.meta !== 'undefined' &&
-      (import.meta as any).env &&
-      (import.meta as any).env.BROWSER) ||
-    '';
+  // Prefer WXT's per-build BROWSER flag. Avoid `typeof import.meta` — Vite
+  // rewrites bare `import.meta` to a document.currentScript / document.baseURI
+  // polyfill that throws ReferenceError in MV3 service workers (status 15).
+  const envBrowser = (import.meta as ImportMeta & { env?: { BROWSER?: string } }).env?.BROWSER ?? '';
   if (envBrowser) return envBrowser as BrowserTarget;
 
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
