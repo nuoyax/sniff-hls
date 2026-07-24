@@ -4,7 +4,7 @@
   <!-- Header -->
   <rect x="0" y="0" width="420" height="56" rx="16" fill="#ffffff"/>
   <rect x="0" y="40" width="420" height="16" fill="#ffffff"/>
-  <text x="20" y="34" font-size="15" font-weight="700" fill="#0f172a">m3u8 Extra</text>
+  <text x="20" y="34" font-size="15" font-weight="700" fill="#0f172a">Sniffls</text>
   <text x="118" y="34" font-size="11" fill="#64748b">example.com</text>
   <!-- header icons -->
   <g fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round">

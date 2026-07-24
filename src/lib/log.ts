@@ -1,5 +1,5 @@
 // Minimal leveled logger. Verbose output gated behind a debug setting.
-const PREFIX = '[m3u8_extra]';
+const PREFIX = '[sniffls]';
 let debug = false;
 
 export function setDebug(v: boolean): void {

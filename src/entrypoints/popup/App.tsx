@@ -118,7 +118,7 @@ export default function App() {
     <div className="flex flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-fg">m3u8 Extra</span>
+          <span className="text-sm font-semibold text-fg">Sniffls</span>
           {pageUrl && <span className="max-w-[140px] truncate text-[11px] text-fg-muted">{hostOf(pageUrl)}</span>}
         </div>
         <div className="flex items-center gap-1">

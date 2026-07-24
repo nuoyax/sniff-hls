@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 320" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
   <rect width="440" height="320" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
-  <text x="24" y="34" font-size="15" font-weight="700" fill="#0f172a">m3u8 Extra — Settings</text>
+  <text x="24" y="34" font-size="15" font-weight="700" fill="#0f172a">Sniffls — Settings</text>
   <text x="24" y="52" font-size="11" fill="#64748b">Tune detection, downloads, and proxy.</text>
 
   <!-- Detection section -->

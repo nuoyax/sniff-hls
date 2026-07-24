@@ -1,8 +1,8 @@
-# m3u8 Extra
+# Sniffls
 
 > 🌐 [English](./README.md) &nbsp;|&nbsp; 简体中文
 
-<!-- 将下方的 {repo} 替换为你的 GitHub 仓库地址，例如 https://github.com/user/m3u8_extra -->
+<!-- 将下方的 {repo} 替换为你的 GitHub 仓库地址，例如 https://github.com/user/sniff-hls -->
 
 [![GitHub stars](https://img.shields.io/badge/⭐-在_GitHub_点星-4f46e5?style=for-the-badge)]({repo}/stargazers)
 [![PayPal 捐款](https://img.shields.io/badge/💛-PayPal_捐款-0070ba?style=for-the-badge)](https://paypal.me/halo651891)
@@ -98,8 +98,8 @@
 
 ### 构建
 ```bash
-git clone <你的仓库地址> m3u8_extra
-cd m3u8_extra
+git clone <你的仓库地址> sniff-hls
+cd sniff-hls
 npm install
 npm run build            # Chrome/Edge（Chromium MV3）
 npm run build:firefox    # Firefox
@@ -119,7 +119,7 @@ npm run build:safari     # Safari（需 Xcode 打包）
 3. 右上角开启 **开发者模式**。
 4. 点击 **加载已解压的扩展程序**。
 5. 选择 `.output/chrome-mv3/` 文件夹。
-6. 工具栏出现 m3u8 Extra 图标，建议固定以便使用。
+6. 工具栏出现 Sniffls 图标，建议固定以便使用。
 
 ### Microsoft Edge
 
@@ -161,7 +161,7 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 ## 🚀 使用说明
 
 1. **打开**播放 HLS 视频的页面。工具栏角标显示检测到的 m3u8 数量。
-2. **点击 m3u8 Extra 图标。** 弹窗列出每条检测到的流及其清晰度档位。
+2. **点击 Sniffls 图标。** 弹窗列出每条检测到的流及其清晰度档位。
 3. **选择清晰度**（如有多个）并点击 **Download**。
 4. 在弹窗查看进度，或打开 **下载管理器**（工具栏图标 → 列表图标）查看实时进度与历史。
 5. 文件进入**浏览器原生下载列表**。
@@ -270,6 +270,6 @@ npm test
 
 ## 📄 许可证
 
-MIT © m3u8 Extra 贡献者。
+MIT © Sniffls 贡献者。
 
 > ⚠️ 请负责任地使用。仅下载你有权访问的内容，尊重版权及所访问网站的服务条款。

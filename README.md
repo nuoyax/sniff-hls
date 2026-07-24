@@ -1,8 +1,8 @@
-# m3u8 Extra
+# Sniffls
 
 > 🌐 [简体中文](./README.zh-CN.md) &nbsp;|&nbsp; English
 
-<!-- Replace {repo} below with your GitHub repo URL, e.g. https://github.com/user/m3u8_extra -->
+<!-- Replace {repo} below with your GitHub repo URL, e.g. https://github.com/user/sniff-hls -->
 
 [![GitHub stars](https://img.shields.io/badge/⭐-Star_on_GitHub-4f46e5?style=for-the-badge)]({repo}/stargazers)
 [![Donate with PayPal](https://img.shields.io/badge/💛-Donate_with_PayPal-0070ba?style=for-the-badge)](https://paypal.me/halo651891)
@@ -98,8 +98,8 @@ Built with **WXT + React + TypeScript + Tailwind**. One codebase → **Chrome / 
 
 ### Build
 ```bash
-git clone <your-repo-url> m3u8_extra
-cd m3u8_extra
+git clone <your-repo-url> sniff-hls
+cd sniff-hls
 npm install
 npm run build            # Chrome/Edge (Chromium MV3)
 npm run build:firefox    # Firefox
@@ -119,7 +119,7 @@ Build output lands in `.output/`:
 3. Toggle **Developer mode** (top-right).
 4. Click **Load unpacked**.
 5. Select the `.output/chrome-mv3/` folder.
-6. The m3u8 Extra icon appears in the toolbar. Pin it for easy access.
+6. The Sniffls icon appears in the toolbar. Pin it for easy access.
 
 ### Microsoft Edge
 
@@ -161,7 +161,7 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 ## 🚀 Usage
 
 1. **Open a page** that plays HLS video. The toolbar badge shows the number of detected m3u8 streams.
-2. **Click the m3u8 Extra icon.** The popup lists every detected stream with its quality renditions.
+2. **Click the Sniffls icon.** The popup lists every detected stream with its quality renditions.
 3. **Pick a quality** (if multiple) and click **Download**.
 4. Watch progress in the popup, or open the **Download Manager** (toolbar icon → list icon) for live progress and history.
 5. The file lands in your **browser's native download list**.
@@ -270,6 +270,6 @@ npm test
 
 ## 📄 License
 
-MIT © m3u8 Extra contributors.
+MIT © Sniffls contributors.
 
 > ⚠️ Use responsibly. Only download content you have the right to access. Respect copyright and the terms of service of the websites you visit.

@@ -14,7 +14,7 @@
   <rect width="980" height="800" fill="#ffffff"/>
 
   <!-- Title -->
-  <text x="490" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">m3u8 Extra — Architecture</text>
+  <text x="490" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Sniffls — Architecture</text>
   <text x="490" y="58" text-anchor="middle" font-size="12" fill="#64748b">Thin Service Worker · DOM-hosted engine · one codebase, four browsers</text>
 
   <!-- ============ UI LAYER ============ -->

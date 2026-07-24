@@ -24,7 +24,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
-      <h1 className="text-xl font-semibold text-fg">m3u8 Extra — Settings</h1>
+      <h1 className="text-xl font-semibold text-fg">Sniffls — Settings</h1>
       <p className="mt-1 text-sm text-fg-muted">Tune detection, downloads, and proxy.</p>
 
       <Section title="Detection">
@@ -118,7 +118,7 @@ export default function App() {
       </Section>
 
       <p className="mt-8 text-[11px] text-fg-muted">
-        m3u8 Extra · v0.1.0 · MIT
+        Sniffls · v0.1.0 · MIT
       </p>
     </div>
   );

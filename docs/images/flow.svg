@@ -9,7 +9,7 @@
   </defs>
 
   <rect width="920" height="360" fill="#ffffff"/>
-  <text x="460" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">m3u8 Extra — Detection → Download Flow</text>
+  <text x="460" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Sniffls — Detection → Download Flow</text>
 
   <!-- Step 1 -->
   <rect x="30" y="80" width="160" height="96" rx="12" fill="#fffbeb" stroke="#fcd34d"/>

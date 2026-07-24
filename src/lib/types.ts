@@ -1,4 +1,4 @@
-// Shared domain types for m3u8_extra.
+// Shared domain types for Sniffls.
 
 /** Where a detection came from. */
 export type DetectionSource = 'network' | 'dom' | 'content-type';

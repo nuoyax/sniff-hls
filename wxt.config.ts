@@ -30,7 +30,7 @@ export default defineConfig({
     if (isChromium) permissions.push('offscreen');
 
     const manifest: Record<string, unknown> = {
-      name: 'm3u8 Extra',
+      name: 'Sniffls',
       description:
         'Detect and download m3u8 (HLS) video as MP4. Network + DOM sniffing, concurrent fetch, AES-128 decrypt, MP4 with .ts fallback.',
       version: '0.1.0',
@@ -50,7 +50,7 @@ export default defineConfig({
     if (isFirefox) {
       manifest.browser_specific_settings = {
         gecko: {
-          id: 'm3u8-extra@local.wxt',
+          id: 'sniff-hls@local.wxt',
           strict_min_version: '115.0',
         },
       };
