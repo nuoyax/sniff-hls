@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 360" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="fa2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="360" fill="#ffffff"/>
+  <text x="460" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">m3u8 Extra — Detection → Download Flow</text>
+
+  <!-- Step 1 -->
+  <rect x="30" y="80" width="160" height="96" rx="12" fill="#fffbeb" stroke="#fcd34d"/>
+  <text x="110" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#92400e">1 · Open page</text>
+  <text x="110" y="130" text-anchor="middle" font-size="11" fill="#b45309">User visits a</text>
+  <text x="110" y="146" text-anchor="middle" font-size="11" fill="#b45309">page with HLS video</text>
+  <text x="110" y="162" text-anchor="middle" font-size="10" fill="#92400e">badge: ● 2</text>
+
+  <!-- Step 2 -->
+  <rect x="230" y="80" width="160" height="96" rx="12" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="310" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">2 · Auto-detect</text>
+  <text x="310" y="130" text-anchor="middle" font-size="11" fill="#1d4ed8">webRequest sniffs</text>
+  <text x="310" y="146" text-anchor="middle" font-size="11" fill="#1d4ed8">.m3u8 network traffic</text>
+  <text x="310" y="162" text-anchor="middle" font-size="10" fill="#1d4ed8">+ optional DOM scan</text>
+
+  <!-- Step 3 -->
+  <rect x="430" y="80" width="160" height="96" rx="12" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="510" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">3 · Probe quality</text>
+  <text x="510" y="130" text-anchor="middle" font-size="11" fill="#1d4ed8">master playlist →</text>
+  <text x="510" y="146" text-anchor="middle" font-size="11" fill="#1d4ed8">list resolutions</text>
+  <text x="510" y="162" text-anchor="middle" font-size="10" fill="#1d4ed8">1080p / 720p / 360p</text>
+
+  <!-- Step 4 -->
+  <rect x="630" y="80" width="160" height="96" rx="12" fill="#f5f3ff" stroke="#c4b5fd"/>
+  <text x="710" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#5b21b6">4 · Click Download</text>
+  <text x="710" y="130" text-anchor="middle" font-size="11" fill="#6d28d9">popup → pick quality</text>
+  <text x="710" y="146" text-anchor="middle" font-size="11" fill="#6d28d9">→ start job in the</text>
+  <text x="710" y="162" text-anchor="middle" font-size="11" fill="#6d28d9">engine host</text>
+
+  <!-- arrows row 1 -->
+  <line x1="190" y1="128" x2="226" y2="128" stroke="#64748b" stroke-width="2" marker-end="url(#fa)"/>
+  <line x1="390" y1="128" x2="426" y2="128" stroke="#64748b" stroke-width="2" marker-end="url(#fa)"/>
+  <line x1="590" y1="128" x2="626" y2="128" stroke="#64748b" stroke-width="2" marker-end="url(#fa)"/>
+
+  <!-- curve down -->
+  <path d="M710,176 C710,210 510,210 510,232" fill="none" stroke="#4f46e5" stroke-width="2.5" marker-end="url(#fa2)"/>
+
+  <!-- Step 5: engine pipeline -->
+  <rect x="150" y="236" width="620" height="56" rx="12" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text x="460" y="260" text-anchor="middle" font-size="13" font-weight="700" fill="#065f46">5 · Engine pipeline (DOM host): fetch segments → AES-128 decrypt → mux.js transmux → assemble</text>
+  <text x="460" y="278" text-anchor="middle" font-size="11" fill="#16a34a">concurrent pool · ordered emission · MP4 first, .ts fallback on any failure</text>
+
+  <!-- Step 6 -->
+  <line x1="460" y1="292" x2="460" y2="308" stroke="#16a34a" stroke-width="2.5" marker-end="url(#fa)"/>
+  <rect x="150" y="312" width="620" height="40" rx="10" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="460" y="338" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">6 · chrome.downloads → file lands in the browser's native download list ✓</text>
+</svg>

@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 800" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4f46e5"/>
+    </marker>
+    <marker id="arrowOk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="800" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="490" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">m3u8 Extra — Architecture</text>
+  <text x="490" y="58" text-anchor="middle" font-size="12" fill="#64748b">Thin Service Worker · DOM-hosted engine · one codebase, four browsers</text>
+
+  <!-- ============ UI LAYER ============ -->
+  <rect x="40" y="78" width="760" height="104" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="56" y="100" font-size="12" font-weight="700" fill="#64748b" letter-spacing="0.5">UI LAYER · React + Tailwind (WXT entrypoints)</text>
+  <!-- chips -->
+  <g font-size="12" font-weight="600" fill="#0f172a">
+    <rect x="60" y="112" width="171" height="56" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="145.5" y="138" text-anchor="middle">Popup</text>
+    <text x="145.5" y="156" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">detected streams</text>
+
+    <rect x="243" y="112" width="171" height="56" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="328.5" y="138" text-anchor="middle">Options</text>
+    <text x="328.5" y="156" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">settings · proxy</text>
+
+    <rect x="426" y="112" width="171" height="56" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="511.5" y="138" text-anchor="middle">Download Manager</text>
+    <text x="511.5" y="156" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">live progress · history</text>
+
+    <rect x="609" y="112" width="171" height="56" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="694.5" y="138" text-anchor="middle">Content Script</text>
+    <text x="694.5" y="156" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">on-demand DOM scan</text>
+  </g>
+
+  <line x1="420" y1="182" x2="420" y2="206" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============ STATE LAYER ============ -->
+  <rect x="40" y="210" width="760" height="92" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="56" y="232" font-size="12" font-weight="700" fill="#64748b" letter-spacing="0.5">STATE LAYER · storage adapters</text>
+  <g font-size="12" font-weight="600" fill="#0f172a">
+    <rect x="60" y="244" width="229" height="48" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="174.5" y="266" text-anchor="middle">Session Store</text>
+    <text x="174.5" y="282" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">storage.session · per-tab</text>
+
+    <rect x="305" y="244" width="229" height="48" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="419.5" y="266" text-anchor="middle">Settings Store</text>
+    <text x="419.5" y="282" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">storage.local · zod</text>
+
+    <rect x="550" y="244" width="229" height="48" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <text x="664.5" y="266" text-anchor="middle">History Store</text>
+    <text x="664.5" y="282" text-anchor="middle" font-size="10" font-weight="400" fill="#64748b">storage.local · FIFO</text>
+  </g>
+
+  <!-- diverge to two columns -->
+  <line x1="225" y1="302" x2="225" y2="326" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="615" y1="302" x2="615" y2="326" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============ DETECTION (SW) ============ -->
+  <rect x="40" y="330" width="370" height="300" rx="14" fill="#fffbeb" stroke="#fcd34d"/>
+  <text x="56" y="356" font-size="13" font-weight="700" fill="#92400e">Detection Layer</text>
+  <text x="56" y="374" font-size="11" fill="#b45309">runs in the Service Worker · passive, cheap</text>
+  <g font-size="12" font-weight="600" fill="#0f172a">
+    <rect x="56" y="388" width="338" height="40" rx="8" fill="#ffffff" stroke="#fde68a"/>
+    <text x="68" y="404">webRequest observer</text>
+    <text x="68" y="419" font-size="10" font-weight="400" fill="#64748b">sniff .m3u8 network requests</text>
+
+    <rect x="56" y="438" width="338" height="40" rx="8" fill="#ffffff" stroke="#fde68a"/>
+    <text x="68" y="454">DOM scanner (content)</text>
+    <text x="68" y="469" font-size="10" font-weight="400" fill="#64748b">fallback: scan page HTML / JSON</text>
+
+    <rect x="56" y="488" width="338" height="40" rx="8" fill="#ffffff" stroke="#fde68a"/>
+    <text x="68" y="504">Master quality probe</text>
+    <text x="68" y="519" font-size="10" font-weight="400" fill="#64748b">parse BANDWIDTH · RESOLUTION</text>
+
+    <rect x="56" y="538" width="338" height="40" rx="8" fill="#ffffff" stroke="#fde68a"/>
+    <text x="68" y="554">Badge</text>
+    <text x="68" y="569" font-size="10" font-weight="400" fill="#64748b">action icon count per tab</text>
+  </g>
+
+  <!-- ============ ENGINE (DOM host) ============ -->
+  <rect x="430" y="330" width="370" height="300" rx="14" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="446" y="356" font-size="13" font-weight="700" fill="#1e3a8a">Download Engine</text>
+  <text x="446" y="374" font-size="11" fill="#1d4ed8">DOM host: offscreen doc (Chromium) · hidden page (Firefox / Safari)</text>
+  <g font-size="12" font-weight="600" fill="#0f172a">
+    <rect x="446" y="388" width="338" height="40" rx="8" fill="#ffffff" stroke="#bfdbfe"/>
+    <text x="458" y="404">Playlist fetcher + parser</text>
+    <text x="458" y="419" font-size="10" font-weight="400" fill="#64748b">master → media, segments</text>
+
+    <rect x="446" y="438" width="338" height="40" rx="8" fill="#ffffff" stroke="#bfdbfe"/>
+    <text x="458" y="454">Segment pool</text>
+    <text x="458" y="469" font-size="10" font-weight="400" fill="#64748b">concurrent · ordered · backpressure</text>
+
+    <rect x="446" y="488" width="338" height="40" rx="8" fill="#ffffff" stroke="#bfdbfe"/>
+    <text x="458" y="504">AES-128 decrypt</text>
+    <text x="458" y="519" font-size="10" font-weight="400" fill="#64748b">WebCrypto · IV by sequence</text>
+
+    <rect x="446" y="538" width="338" height="40" rx="8" fill="#ffffff" stroke="#bfdbfe"/>
+    <text x="458" y="554">mux.js transmux</text>
+    <text x="458" y="569" font-size="10" font-weight="400" fill="#64748b">TS → fMP4 · no re-encode</text>
+
+    <rect x="446" y="588" width="338" height="40" rx="8" fill="#ffffff" stroke="#bfdbfe"/>
+    <text x="458" y="604">Blob assembler</text>
+    <text x="458" y="619" font-size="10" font-weight="400" fill="#64748b">MP4 → .ts fallback</text>
+  </g>
+
+  <!-- detection triggers engine -->
+  <line x1="410" y1="480" x2="430" y2="480" stroke="#4f46e5" stroke-width="2.5" marker-end="url(#arrowAccent)"/>
+  <text x="420" y="472" text-anchor="middle" font-size="10" font-weight="600" fill="#4f46e5">detect</text>
+
+  <!-- engine → chrome.downloads -->
+  <line x1="615" y1="630" x2="615" y2="660" stroke="#16a34a" stroke-width="2.5" marker-end="url(#arrowOk)"/>
+
+  <!-- ============ chrome.downloads ============ -->
+  <rect x="300" y="664" width="380" height="58" rx="12" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="490" y="690" text-anchor="middle" font-size="14" font-weight="700" fill="#15803d">chrome.downloads.download</text>
+  <text x="490" y="708" text-anchor="middle" font-size="11" fill="#16a34a">final file → browser native download list</text>
+
+  <!-- ============ PLATFORM SHIM (side bar) ============ -->
+  <rect x="820" y="78" width="120" height="644" rx="14" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="880" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#3730a3">Platform</text>
+  <text x="880" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#3730a3">Shim</text>
+  <text x="880" y="138" text-anchor="middle" font-size="9" fill="#6366f1">cuts through every layer</text>
+  <g font-size="10" font-weight="600" fill="#3730a3">
+    <rect x="836" y="158" width="88" height="32" rx="8" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="880" y="178" text-anchor="middle">feature-detect</text>
+
+    <rect x="836" y="238" width="88" height="32" rx="8" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="880" y="258" text-anchor="middle">offscreen</text>
+
+    <rect x="836" y="318" width="88" height="32" rx="8" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="880" y="338" text-anchor="middle">proxy</text>
+
+    <rect x="836" y="398" width="88" height="32" rx="8" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="880" y="418" text-anchor="middle">storage</text>
+
+    <rect x="836" y="478" width="88" height="32" rx="8" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="880" y="498" text-anchor="middle">webRequest</text>
+
+    <rect x="836" y="558" width="88" height="32" rx="8" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="880" y="578" text-anchor="middle">downloads</text>
+  </g>
+
+  <!-- caption -->
+  <text x="490" y="752" text-anchor="middle" font-size="11" fill="#64748b">Engine host chosen by runtime feature-detect — the SW stays thin &amp; stateless; long downloads survive its 30s idle recycle.</text>
+</svg>

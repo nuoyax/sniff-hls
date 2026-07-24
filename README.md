@@ -25,6 +25,15 @@ Built with **WXT + React + TypeScript + Tailwind**. One codebase → **Chrome / 
 
 ## 🧠 How it works
 
+![Architecture](docs/images/architecture.svg)
+
+### Detection → Download flow
+
+![Detection and download flow](docs/images/flow.svg)
+
+<details>
+<summary>ASCII version of the architecture diagram</summary>
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  UI layer (React + Tailwind, WXT entrypoints)                  │
@@ -51,6 +60,8 @@ Built with **WXT + React + TypeScript + Tailwind**. One codebase → **Chrome / 
         │  Cross-browser platform shim (offscreen vs extension page) │
         └──────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### Why this architecture is fast
 - **The MV3 service worker stays thin.** All heavy work (fetch pool, decrypt, transmux, Blob assembly) runs in a long-lived DOM context — a `chrome.offscreen` document on Chromium, a hidden extension page on Firefox/Safari — that survives the SW's 30s idle recycle. Downloads can run for minutes without SW involvement.
@@ -146,6 +157,14 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 3. **Pick a quality** (if multiple) and click **Download**.
 4. Watch progress in the popup, or open the **Download Manager** (toolbar icon → list icon) for live progress and history.
 5. The file lands in your **browser's native download list**.
+
+### Popup
+
+![Popup preview — detected streams, quality picker, live download progress](docs/images/popup-preview.svg)
+
+### Settings
+
+![Options preview — detection, downloads, proxy](docs/images/options-preview.svg)
 
 ### Settings (Options page)
 - **Auto-detect** on/off (network sniffing)

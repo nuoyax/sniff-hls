@@ -25,6 +25,15 @@
 
 ## 🧠 工作原理
 
+![架构图](docs/images/architecture.svg)
+
+### 检测 → 下载流程
+
+![检测与下载流程](docs/images/flow.svg)
+
+<details>
+<summary>架构图的 ASCII 版本</summary>
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  UI 层 (React + Tailwind, WXT entrypoints)                     │
@@ -51,6 +60,8 @@
         │  跨浏览器平台 shim (offscreen vs 扩展页宿主)                 │
         └──────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### 为什么这个架构性能更好
 - **MV3 Service Worker 保持轻量。** 所有重活（分片池、解密、转封装、Blob 拼接）跑在长生命周期的 DOM 上下文里——Chromium 用 `chrome.offscreen` 文档，Firefox/Safari 用隐藏扩展页——它们不受 SW 30 秒空闲回收影响。下载可持续数分钟而无需 SW 参与。
@@ -146,6 +157,14 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 3. **选择清晰度**（如有多个）并点击 **Download**。
 4. 在弹窗查看进度，或打开 **下载管理器**（工具栏图标 → 列表图标）查看实时进度与历史。
 5. 文件进入**浏览器原生下载列表**。
+
+### 弹窗
+
+![弹窗预览 — 检测到的流、清晰度选择、实时下载进度](docs/images/popup-preview.svg)
+
+### 设置
+
+![设置预览 — 检测、下载、代理](docs/images/options-preview.svg)
 
 ### 设置（选项页）
 - **自动检测** 开/关（网络嗅探）
