@@ -2,9 +2,17 @@
 
 > 🌐 [简体中文](./README.zh-CN.md) &nbsp;|&nbsp; English
 
+<!-- Replace {repo} below with your GitHub repo URL, e.g. https://github.com/user/m3u8_extra -->
+
+[![GitHub stars](https://img.shields.io/badge/⭐-Star_on_GitHub-4f46e5?style=for-the-badge)]({repo}/stargazers)
+[![Donate with PayPal](https://img.shields.io/badge/💛-Donate_with_PayPal-0070ba?style=for-the-badge)](https://paypal.me/halo651891)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](#-license)
+
 A cross-browser extension that **auto-detects m3u8 (HLS) streams** on any page and **downloads them as MP4** — directly into your browser's download list. No desktop app, no ffmpeg, no external tools.
 
 Built with **WXT + React + TypeScript + Tailwind**. One codebase → **Chrome / Edge / Firefox / Safari** (Manifest V3).
+
+> 💖 **Found it useful?** Give it a ⭐ on GitHub, or [buy the author a coffee via PayPal](https://paypal.me/halo651891) — every cup keeps the project brewing. ☕
 
 ---
 

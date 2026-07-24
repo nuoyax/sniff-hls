@@ -2,9 +2,17 @@
 
 > 🌐 [English](./README.md) &nbsp;|&nbsp; 简体中文
 
+<!-- 将下方的 {repo} 替换为你的 GitHub 仓库地址，例如 https://github.com/user/m3u8_extra -->
+
+[![GitHub stars](https://img.shields.io/badge/⭐-在_GitHub_点星-4f46e5?style=for-the-badge)]({repo}/stargazers)
+[![PayPal 捐款](https://img.shields.io/badge/💛-PayPal_捐款-0070ba?style=for-the-badge)](https://paypal.me/halo651891)
+[![许可证: MIT](https://img.shields.io/badge/许可证-MIT-22c55e?style=for-the-badge)](#-许可证)
+
 一款跨浏览器扩展，**自动检测网页上的 m3u8（HLS）流**并**下载为 MP4**——直接存入浏览器的下载列表。无需桌面端、无需 ffmpeg、无需任何外部工具。
 
 基于 **WXT + React + TypeScript + Tailwind** 构建。一套代码 → **Chrome / Edge / Firefox / Safari**（Manifest V3）。
+
+> 💖 **觉得好用？** 在 GitHub 给个 ⭐，或[通过 PayPal 请作者喝杯咖啡](https://paypal.me/halo651891)——每一杯都是项目持续维护的动力。☕
 
 ---
 
