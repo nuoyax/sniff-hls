@@ -1,0 +1,248 @@
+# m3u8 Extra
+
+> 🌐 [English](./README.md) &nbsp;|&nbsp; 简体中文
+
+一款跨浏览器扩展，**自动检测网页上的 m3u8（HLS）流**并**下载为 MP4**——直接存入浏览器的下载列表。无需桌面端、无需 ffmpeg、无需任何外部工具。
+
+基于 **WXT + React + TypeScript + Tailwind** 构建。一套代码 → **Chrome / Edge / Firefox / Safari**（Manifest V3）。
+
+---
+
+## ✨ 功能特性
+
+- **自动检测**：通过 `webRequest` 网络嗅探 + 按需 DOM 扫描，识别任意页面的 m3u8。
+- **下载为 MP4**：用 `mux.js` 将 `.ts` 分片转封装为 fMP4（不重编码，快）。**自动降级为 `.ts`**：当流用了不支持的加密方式或异常编码时。
+- **AES-128 解密**：基于 WebCrypto（显式 IV 或按 RFC 8216 序号派生 IV）。
+- **清晰度选择**：列出 master playlist 的所有档位；默认最高码率。
+- **并发分片下载**：带重试 + 指数退避（可配 1–20）。
+- **下载管理器**：实时进度、历史记录、重试、清空。
+- **角标计数**：工具栏图标显示当前页检测到的流数量。
+- **代理支持**：受限网络下可设置每扩展独立的代理。
+- **跨浏览器**：Chrome、Edge、Firefox、Safari。
+- **隐私优先**：遥测默认关闭；URL、页面标题、文件内容绝不离开浏览器。
+
+---
+
+## 🧠 工作原理
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  UI 层 (React + Tailwind, WXT entrypoints)                     │
+│  popup · options · download-manager · content script           │
+└───────────▲───────────────────────────────────┬──────────────┘
+            │ runtime 消息                       │ storage
+┌───────────┴───────────────────────────────────▼──────────────┐
+│  状态层  (session · settings · history stores)               │
+└───────────▲───────────────────────────────────┬──────────────┘
+            │                                     │
+┌───────────┴────────────┐           ┌────────────▼───────────────┐
+│  检测层 (SW)             │           │  下载引擎 (DOM 宿主)         │
+│  webRequest 观察器       │──检测到──▶│  playlist fetcher + parser  │
+│  DOM 扫描器 (content)   │           │  分片并发池                  │
+│  master 清晰度探测       │           │  AES-128 解密 (WebCrypto)   │
+└─────────────────────────┘           │  mux.js 转封装 (TS→fMP4)     │
+                                      │  blob 拼接 (+ts 兜底)        │
+                                      └─────────────┬───────────────┘
+                                                    │ blob URL
+                                      ┌─────────────▼───────────────┐
+                                      │  chrome.downloads.download   │
+                                      └─────────────────────────────┘
+        ┌──────────────────────────────────────────────────────────┐
+        │  跨浏览器平台 shim (offscreen vs 扩展页宿主)                 │
+        └──────────────────────────────────────────────────────────┘
+```
+
+### 为什么这个架构性能更好
+- **MV3 Service Worker 保持轻量。** 所有重活（分片池、解密、转封装、Blob 拼接）跑在长生命周期的 DOM 上下文里——Chromium 用 `chrome.offscreen` 文档，Firefox/Safari 用隐藏扩展页——它们不受 SW 30 秒空闲回收影响。下载可持续数分钟而无需 SW 参与。
+- **SW 挂掉也能恢复。** 每分片进度落 `storage.session`，SW 唤醒后重连运行中的宿主。
+- **流式转封装。** 分片按序到达即喂给 `mux.js`，逐片处理，无需全量缓冲。
+- **有界并发 + 背压。** 可配并发池并行拉取，但按播放列表顺序产出；字节预算防止超大播放列表内存爆涨。
+- **一套引擎，两个宿主。** 引擎代码只依赖 `fetch` / `crypto.subtle` / `Blob` / `URL`；宿主选择是运行时一行 feature-detect。
+
+---
+
+## 🌍 支持的浏览器
+
+| 浏览器 | 支持 | 引擎宿主 |
+|---|---|---|
+| Chrome 109+ | ✅ 完整 | `chrome.offscreen` 文档 |
+| Edge 109+ | ✅ 完整 | `chrome.offscreen` 文档 |
+| Firefox 115+ | ✅ 完整 | 隐藏扩展页（无 offscreen API） |
+| Safari 16+ | ⚠️ 尽力而为 | 隐藏扩展页（无 offscreen/proxy） |
+
+---
+
+## 📦 离线安装
+
+### 前置条件
+- [Node.js](https://nodejs.org/) 18+ 及 npm（或 pnpm/yarn）。
+
+### 构建
+```bash
+git clone <你的仓库地址> m3u8_extra
+cd m3u8_extra
+npm install
+npm run build            # Chrome/Edge（Chromium MV3）
+npm run build:firefox    # Firefox
+npm run build:safari     # Safari（需 Xcode 打包）
+```
+构建产物在 `.output/` 下：
+- `.output/chrome-mv3/` — Chrome 与 Edge
+- `.output/firefox-mv3/` — Firefox
+- `.output/safari-mv3/` — Safari
+
+---
+
+### Chrome
+
+1. 执行 `npm run build`。
+2. 打开 `chrome://extensions`。
+3. 右上角开启 **开发者模式**。
+4. 点击 **加载已解压的扩展程序**。
+5. 选择 `.output/chrome-mv3/` 文件夹。
+6. 工具栏出现 m3u8 Extra 图标，建议固定以便使用。
+
+### Microsoft Edge
+
+1. 执行 `npm run build`（与 Chrome 同一份 Chromium 构建）。
+2. 打开 `edge://extensions`。
+3. 左侧栏开启 **开发人员模式**。
+4. 点击 **加载解压缩的扩展**。
+5. 选择 `.output/chrome-mv3/` 文件夹。
+
+### Firefox
+
+> ⚠️ 临时附加组件在 Firefox 关闭后会被移除。如需永久安装，请经 [addons.mozilla.org](https://addons.mozilla.org/developers/) 签名，或使用 Firefox 开发者版/ESR 版加载已签名扩展。
+
+1. 执行 `npm run build:firefox`。
+2. 打开 `about:debugging#/runtime/this-firefox`。
+3. 点击 **临时载入附加组件…**。
+4. 选择文件 `.output/firefox-mv3/manifest.json`。
+5. 扩展立即加载，直到重启 Firefox 前有效。
+
+打包可分发的 `.xpi`：
+```bash
+npm run zip:firefox
+# → .output/firefox-mv3.zip
+```
+
+### Safari
+
+Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目包装的源码：
+
+1. 执行 `npm run build:safari`。
+2. 打开 Xcode → 创建 **Safari Web Extension** 目标，包装 `.output/safari-mv3/`。
+3. 构建并运行 → 在 **Safari → 设置 → 扩展** 中启用。
+4. 在 **开发 → [你的扩展]** 中允许。
+
+> Safari 在 MVP 的限制：无代理支持，无 `offscreen`（用隐藏页宿主）。
+
+---
+
+## 🚀 使用说明
+
+1. **打开**播放 HLS 视频的页面。工具栏角标显示检测到的 m3u8 数量。
+2. **点击 m3u8 Extra 图标。** 弹窗列出每条检测到的流及其清晰度档位。
+3. **选择清晰度**（如有多个）并点击 **Download**。
+4. 在弹窗查看进度，或打开 **下载管理器**（工具栏图标 → 列表图标）查看实时进度与历史。
+5. 文件进入**浏览器原生下载列表**。
+
+### 设置（选项页）
+- **自动检测** 开/关（网络嗅探）
+- **DOM 扫描** 开/关（按需页面扫描）
+- **输出格式**：自动（MP4 → TS 兜底）/ 始终 MP4 / 始终 TS
+- **并发数**：1–20 个并行分片
+- **默认清晰度**：最高 / 最低码率
+- **下载子文件夹**
+- **代理**：HTTP / HTTPS / SOCKS5
+- **通知**、**遥测**、**调试日志**
+
+---
+
+## 🔐 权限说明
+
+| 权限 | 用途 |
+|---|---|
+| `webRequest` + `host_permissions: <all_urls>` | 嗅探任意站点的 m3u8 网络请求；跨域拉取分片（免 CORS）。 |
+| `storage` | 持久化设置/历史；`storage.session` 存每 tab 临时检测。 |
+| `downloads` | 将最终文件交给浏览器下载列表。 |
+| `offscreen`（仅 Chromium） | 在 DOM 上下文承载下载引擎（Blob/URL.createObjectURL）。 |
+| `scripting` + `tabs` | 按需 DOM 扫描；读取当前 tab URL 用于命名。 |
+| `notifications` | 可选的完成/失败通知。 |
+| `proxy`（可选） | 受限网络下每扩展独立的代理覆盖。 |
+
+> `<all_urls>` 会触发"读取和更改你所有数据"提示。这是核心功能（嗅探 + 下载任意站点的 m3u8）不可避免的。本扩展**绝不上传**任何页面数据——见[隐私](#-隐私)。
+
+---
+
+## 🔒 隐私
+
+- **遥测默认关闭。** 即使开启，也仅收集匿名的功能使用计数——绝不包含 URL、页面标题或文件内容。
+- 所有检测与下载都在本地浏览器完成。除你主动下载的 m3u8 分片（直接从源 CDN 拉取）外，无任何数据离开你的设备。
+- DRM 加密流（Widevine/FairPlay/PlayReady、SAMPLE-AES）**不会被绕过**；解密不支持时自动降级为原始 `.ts`，或明确报错失败。
+
+---
+
+## ⚠️ 限制
+
+- MVP **仅支持点播（VOD）**——直播录制后续规划。
+- DRM 加密流无法解密；将降级为原始 `.ts` 或明确报错。
+- Safari：无代理支持；使用隐藏页引擎宿主。
+
+---
+
+## 🛠️ 开发
+
+```bash
+npm install
+npm run dev            # Chrome，WXT 热重载
+npm run dev:firefox    # Firefox 开发
+npm test               # 引擎单元测试（vitest）
+npm run typecheck      # tsc --noEmit
+npm run build          # 生产构建（Chrome/Edge）
+npm run zip            # 打包 .zip 供分发
+```
+
+### 项目结构
+```
+src/
+├─ entrypoints/        # WXT 入口
+│  ├─ background.ts        # SW：检测、路由、角标、任务调度
+│  ├─ popup/               # 检测流弹窗 UI
+│  ├─ options/             # 设置 UI
+│  ├─ download-manager/    # 实时 + 历史 UI
+│  ├─ offscreen/           # Chromium 引擎宿主（offscreen 文档）
+│  ├─ download-runner/     # Firefox/Safari 引擎宿主（隐藏页）
+│  └─ content.ts           # 按需 DOM 扫描器
+├─ lib/
+│  ├─ detection/           # webRequestObserver, urlNormalizer, qualityProbe, badge
+│  ├─ state/               # sessionStore, settingsStore, historyStore
+│  ├─ engine/              # engine, m3u8Parser, segmentPool, aesDecryptor,
+│  │                       # transmuxer, blobAssembler, hostManager, hostRuntime
+│  ├─ platform/            # browser shim, featureDetect, downloadsShim, proxyShim, messaging
+│  └─ types, errors, log
+├─ components/         # React UI（Stich 风格设计系统）
+└─ assets/styles.css   # Tailwind + 设计 token
+tests/                 # 引擎 + 解析器单元测试
+```
+
+---
+
+## 🧪 测试
+
+引擎核心用 Vitest 做单元测试：
+- `tests/m3u8Parser.test.ts` — master/media 播放列表、AES-128 密钥、字节范围、init segment。
+- `tests/urlNormalizer.test.ts` — m3u8 识别、URL 归一化、文件名派生。
+- `tests/aesDecryptor.test.ts` — IV 派生、解密器直通/报错路径。
+
+```bash
+npm test
+```
+
+---
+
+## 📄 许可证
+
+MIT © m3u8 Extra 贡献者。
+
+> ⚠️ 请负责任地使用。仅下载你有权访问的内容，尊重版权及所访问网站的服务条款。

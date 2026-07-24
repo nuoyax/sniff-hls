@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Stich-inspired design tokens. Light is default; .dark overrides. */
+:root {
+  --bg: 255 255 255;
+  --bg-subtle: 248 250 252;
+  --bg-elevated: 255 255 255;
+  --border: 226 232 240;
+  --fg: 15 23 42;
+  --fg-muted: 100 116 139;
+  --accent: 79 70 229;
+  --accent-fg: 255 255 255;
+  --ok: 22 163 74;
+  --warn: 217 119 6;
+  --danger: 220 38 38;
+}
+
+.dark {
+  --bg: 15 23 42;
+  --bg-subtle: 2 6 23;
+  --bg-elevated: 30 41 59;
+  --border: 51 65 85;
+  --fg: 241 245 249;
+  --fg-muted: 148 163 184;
+  --accent: 129 140 248;
+  --accent-fg: 15 23 42;
+  --ok: 34 197 94;
+  --warn: 245 158 11;
+  --danger: 248 113 113;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-family: theme('fontFamily.sans');
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, restrained scrollbars */
+* {
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 9999px;
+}

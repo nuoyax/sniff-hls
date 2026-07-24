@@ -1,6 +1,15 @@
 node_modules/
 dist/
+.output/
+.wxt/
 .env
 .env.*
-# AI OS local state — never commit
+# AI OS / Claude local config — never commit
 .claude/
+CLAUDE.md
+.mcp.json
+.claudeignore
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
