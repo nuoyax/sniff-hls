@@ -29,7 +29,8 @@
 ## ✨ Features
 
 - **Auto-detect** m3u8 on every page via network sniffing (`webRequest`) + on-demand DOM scan — including wrapper URLs that bury the real playlist in a `?url=` query.
-- **Download as MP4** — transmuxes `.ts` segments to fMP4 with `mux.js` (no re-encode, fast). **Automatic `.ts` fallback** when a stream is encrypted with an unsupported cipher or uses an unusual codec.
+- **Download as MP4** — transmuxes classic `.ts` HLS to fMP4 with `mux.js` (no re-encode). **CMAF/fMP4** playlists (`#EXT-X-MAP`) concat init + media; demuxed audio (`#EXT-X-MEDIA` + `AUDIO=`) is remuxed with [mediabunny](https://mediabunny.dev/). Automatic `.ts` fallback for classic TS when an unsupported cipher or unusual codec is used.
+- **X (Twitter) videos** — amplify HLS on `video.twimg.com` (separate video/audio CMAF playlists) downloads as a single playable MP4 with audio. Open a post that plays video, wait for the badge, then download from the popup (pick quality if offered). If the CDN is blocked in your region, enable a proxy in Options or use the system/browser proxy.
 - **AES-128 decryption** via WebCrypto (explicit IV or sequence-derived, per RFC 8216).
 - **Quality picker** — lists every rendition from a master playlist; defaults to highest bandwidth.
 - **Concurrent segment fetcher** with retry + exponential backoff (configurable 1–20).
@@ -176,6 +177,8 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 4. Watch progress in the popup, or open the **Download Manager** (toolbar icon → list icon) for live progress and history.
 5. The file lands in your **browser's native download list**.
 
+> **Tip — X (Twitter):** play the video on x.com / twitter.com first so the amplify m3u8 is requested; Sniffls sniffs `video.twimg.com`. Then download from the popup.
+
 ### Popup
 
 ![Popup preview — detected streams, quality picker, live download progress](docs/images/popup-preview.svg)
@@ -225,6 +228,7 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 - **VOD only** in this MVP — live stream recording is planned.
 - DRM-encrypted streams cannot be decrypted; they fall back to raw `.ts` or fail with a clear message.
 - Safari: no proxy support; same hidden-page engine host as other browsers.
+- **X (Twitter):** works for public amplify HLS (CMAF). Private/protected media, DRM, or CDN blocks still fail — use proxy if `video.twimg.com` is unreachable. Live Spaces / non-HLS players are out of scope.
 
 ---
 
@@ -255,7 +259,8 @@ src/
 │  ├─ detection/           # webRequestObserver, urlNormalizer, qualityProbe, badge
 │  ├─ state/               # sessionStore, settingsStore, historyStore
 │  ├─ engine/              # engine, m3u8Parser, segmentPool, aesDecryptor,
-│  │                       # transmuxer, blobAssembler, hostManager, hostProtocol, hostRuntime
+│  │                       # transmuxer, blobAssembler, fmp4Merge (mediabunny),
+│  │                       # containerDetect, hostManager, hostProtocol, hostRuntime
 │  ├─ platform/            # browser shim, featureDetect, downloadsShim, proxyShim, messaging
 │  └─ types, errors, log
 ├─ components/         # React UI (Stich-style design system)
@@ -268,8 +273,9 @@ tests/                 # engine + parser unit tests
 ## 🧪 Testing
 
 Engine internals are unit-tested with Vitest:
-- `tests/m3u8Parser.test.ts` — master/media playlists, AES-128 keys, byteranges, init segments.
+- `tests/m3u8Parser.test.ts` — master/media playlists, AES-128 keys, byteranges, init segments, demuxed AUDIO groups.
 - `tests/urlNormalizer.test.ts` — m3u8 detection, wrapper `?url=` unwrap, URL normalization, filename derivation.
+- `tests/containerDetect.test.ts` — MPEG-TS vs fMP4/CMAF detection.
 - `tests/aesDecryptor.test.ts` — IV derivation, decryptor passthrough/error paths.
 
 ```bash

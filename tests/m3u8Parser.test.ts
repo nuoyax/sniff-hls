@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parsePlaylist, pickBestVariant, parseAttrs, parseHex } from '../src/lib/engine/m3u8Parser';
+import {
+  parsePlaylist,
+  pickBestVariant,
+  pickAudioRendition,
+  parseAttrs,
+  parseHex,
+} from '../src/lib/engine/m3u8Parser';
 
 const MASTER = `#EXTM3U
 #EXT-X-VERSION:3
@@ -122,5 +128,46 @@ describe('parsePlaylist byterange + map', () => {
     expect(pl.segments[0].byterange).toEqual({ offset: 2048, length: 32768 });
     expect(pl.segments[0].sequence).toBe(1); // media sequence 1
     expect(pl.segments[0].url).toBe('https://cdn.example.com/chunks.m4s');
+  });
+});
+
+const TWITTER_LIKE_MASTER = `#EXTM3U
+#EXT-X-VERSION:6
+#EXT-X-INDEPENDENT-SEGMENTS
+#EXT-X-MEDIA:NAME="Audio",TYPE=AUDIO,GROUP-ID="audio-32000",AUTOSELECT=YES,URI="/amplify/pl/mp4a/32000/a.m3u8"
+#EXT-X-MEDIA:NAME="Audio",TYPE=AUDIO,GROUP-ID="audio-128000",AUTOSELECT=YES,DEFAULT=YES,URI="/amplify/pl/mp4a/128000/b.m3u8"
+#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=201818,BANDWIDTH=256923,RESOLUTION=320x320,CODECS="mp4a.40.2,avc1.4D401E",AUDIO="audio-32000"
+/amplify/pl/avc1/320x320/v0.m3u8
+#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=3056912,BANDWIDTH=4217042,RESOLUTION=1080x1080,CODECS="mp4a.40.2,avc1.64002A",AUDIO="audio-128000"
+/amplify/pl/avc1/1080x1080/v1.m3u8
+`;
+
+describe('parsePlaylist demuxed audio (Twitter-style)', () => {
+  const pl = parsePlaylist(
+    TWITTER_LIKE_MASTER,
+    'https://video.example.com/amplify/pl/master.m3u8',
+  );
+
+  it('parses AUDIO media groups with absolute URIs', () => {
+    expect(pl.isMaster).toBe(true);
+    expect(pl.mediaGroups?.AUDIO?.['audio-128000']?.length).toBe(1);
+    expect(pl.mediaGroups!.AUDIO!['audio-128000'][0].uri).toBe(
+      'https://video.example.com/amplify/pl/mp4a/128000/b.m3u8',
+    );
+    expect(pl.mediaGroups!.AUDIO!['audio-128000'][0].default).toBe(true);
+  });
+
+  it('links STREAM-INF AUDIO group id on variants', () => {
+    expect(pl.variants).toHaveLength(2);
+    expect(pl.variants[0].audioGroupId).toBe('audio-32000');
+    expect(pl.variants[1].audioGroupId).toBe('audio-128000');
+  });
+
+  it('pickBestVariant keeps audio group for remux', () => {
+    const best = pickBestVariant(pl.variants)!;
+    expect(best.bandwidth).toBe(4217042);
+    expect(best.audioGroupId).toBe('audio-128000');
+    const audio = pickAudioRendition(pl.mediaGroups!.AUDIO![best.audioGroupId!]);
+    expect(audio?.uri).toContain('/mp4a/128000/');
   });
 });

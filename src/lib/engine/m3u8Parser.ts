@@ -9,6 +9,7 @@ import type {
   VariantInfo,
   KeyInfo,
   InitSegment,
+  MediaRendition,
 } from '../types';
 
 /** Parse an #EXT-X-KEY attribute string into KeyInfo. */
@@ -116,6 +117,7 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
   let initSegment: InitSegment | undefined;
   const variants: VariantInfo[] = [];
   const segments: Segment[] = [];
+  const mediaGroups: NonNullable<ParsedPlaylist['mediaGroups']> = {};
 
   let pendingStreamInf: Partial<VariantInfo> | null = null;
   let pendingInf: { duration: number; title?: string } | null = null;
@@ -157,6 +159,24 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
       if (br) pendingByterange = { offset: br.offset < 0 ? 0 : br.offset, length: br.length };
       continue;
     }
+    if (line.startsWith('#EXT-X-MEDIA:')) {
+      isMaster = true;
+      const rendition = parseMedia(line.slice('#EXT-X-MEDIA:'.length), baseUrl);
+      if (rendition?.type === 'AUDIO') {
+        const bucket = (mediaGroups.AUDIO ??= {});
+        (bucket[rendition.groupId] ??= []).push(rendition);
+      } else if (rendition?.type === 'VIDEO') {
+        const bucket = (mediaGroups.VIDEO ??= {});
+        (bucket[rendition.groupId] ??= []).push(rendition);
+      } else if (rendition?.type === 'SUBTITLES') {
+        const bucket = (mediaGroups.SUBTITLES ??= {});
+        (bucket[rendition.groupId] ??= []).push(rendition);
+      } else if (rendition?.type === 'CLOSED-CAPTIONS') {
+        const bucket = (mediaGroups['CLOSED-CAPTIONS'] ??= {});
+        (bucket[rendition.groupId] ??= []).push(rendition);
+      }
+      continue;
+    }
     if (line.startsWith('#EXT-X-STREAM-INF:')) {
       isMaster = true;
       pendingStreamInf = parseStreamInf(line.slice('#EXT-X-STREAM-INF:'.length));
@@ -186,6 +206,7 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
         codecs: pendingStreamInf.codecs,
         frameRate: pendingStreamInf.frameRate,
         averageBandwidth: pendingStreamInf.averageBandwidth,
+        audioGroupId: pendingStreamInf.audioGroupId,
       });
       pendingStreamInf = null;
       continue;
@@ -210,6 +231,7 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
   }
 
   const totalDuration = segments.reduce((s, x) => s + x.duration, 0);
+  const hasMediaGroups = Object.keys(mediaGroups).length > 0;
 
   return {
     isMaster,
@@ -218,11 +240,28 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
     mediaSequence,
     endList,
     variants,
+    mediaGroups: hasMediaGroups ? mediaGroups : undefined,
     segments,
     key,
     initSegment,
     totalDuration,
   };
+}
+
+function parseMedia(attrsStr: string, base: string): MediaRendition | undefined {
+  const attrs = parseAttrs(attrsStr);
+  if (!attrs.TYPE || !attrs['GROUP-ID']) return undefined;
+  const rendition: MediaRendition = {
+    type: attrs.TYPE,
+    groupId: attrs['GROUP-ID'],
+    name: attrs.NAME || attrs['GROUP-ID'],
+  };
+  if (attrs.URI) rendition.uri = resolveMaybeQuoted(attrs.URI, base);
+  if (attrs.LANGUAGE) rendition.language = attrs.LANGUAGE;
+  if (attrs.DEFAULT === 'YES') rendition.default = true;
+  if (attrs.AUTOSELECT === 'YES') rendition.autoselect = true;
+  if (attrs.CHANNELS) rendition.channels = attrs.CHANNELS;
+  return rendition;
 }
 
 function parseStreamInf(attrsStr: string): Partial<VariantInfo> {
@@ -241,6 +280,7 @@ function parseStreamInf(attrsStr: string): Partial<VariantInfo> {
     const fr = parseFloat(attrs['FRAME-RATE']);
     if (Number.isFinite(fr)) out.frameRate = fr;
   }
+  if (attrs.AUDIO) out.audioGroupId = attrs.AUDIO;
   return out;
 }
 
@@ -249,3 +289,12 @@ export function pickBestVariant(variants: VariantInfo[]): VariantInfo | undefine
   if (!variants.length) return undefined;
   return variants.slice().sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0];
 }
+
+/** Pick an audio rendition with a URI from a GROUP-ID list. */
+export function pickAudioRendition(renditions: MediaRendition[] | undefined): MediaRendition | undefined {
+  if (!renditions?.length) return undefined;
+  const withUri = renditions.filter((r) => !!r.uri);
+  if (!withUri.length) return undefined;
+  return withUri.find((r) => r.default) || withUri.find((r) => r.autoselect) || withUri[0];
+}
+

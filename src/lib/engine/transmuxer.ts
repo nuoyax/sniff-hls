@@ -9,11 +9,17 @@ let TransmuxerCtor: TransmuxerType | null = null;
 
 async function getTransmuxer(): Promise<TransmuxerType> {
   if (TransmuxerCtor) return TransmuxerCtor;
-  // mux.js exposes Transmuxer on its default export or named.
+  // mux.js v6 ESM shape: default export is { codecs, mp4, flv, mp2t, partial }
+  // and Transmuxer lives at default.mp4.Transmuxer (not the default itself).
   // @ts-expect-error — mux.js ships no bundled types; treat as any.
   const mod: any = await import('mux.js');
-  TransmuxerCtor = mod.Transmuxer || (mod.default && mod.default.Transmuxer) || mod.default;
-  if (!TransmuxerCtor) {
+  const root = mod?.default ?? mod;
+  TransmuxerCtor =
+    root?.mp4?.Transmuxer ||
+    mod?.mp4?.Transmuxer ||
+    root?.Transmuxer ||
+    mod?.Transmuxer;
+  if (typeof TransmuxerCtor !== 'function') {
     throw new ExtensionError('TRANSMUX', 'mux.js Transmuxer not found');
   }
   return TransmuxerCtor;

@@ -29,7 +29,8 @@
 ## ✨ 功能特性
 
 - **自动检测**：通过 `webRequest` 网络嗅探 + 按需 DOM 扫描，识别任意页面的 m3u8——包括把真实播放列表藏在 `?url=` 查询参数里的包装页。
-- **下载为 MP4**：用 `mux.js` 将 `.ts` 分片转封装为 fMP4（不重编码，快）。**自动降级为 `.ts`**：当流用了不支持的加密方式或异常编码时。
+- **下载为 MP4**：经典 `.ts` HLS 用 `mux.js` 转封装为 fMP4（不重编码）。**CMAF/fMP4**（`#EXT-X-MAP`）拼接 init + 分片；分离音轨（`#EXT-X-MEDIA` + `AUDIO=`）用 [mediabunny](https://mediabunny.dev/) remux。经典 TS 在不支持的加密或异常编码时自动降级为 `.ts`。
+- **X（Twitter）视频**：支持 `video.twimg.com` 的 amplify HLS（音视频分离的 CMAF），下载为带音频的单个可播 MP4。打开含视频的帖子，等角标出现后在弹窗下载（可选手动选清晰度）。若所在网络无法访问 CDN，请在设置里启用代理，或使用系统/浏览器代理。
 - **AES-128 解密**：基于 WebCrypto（显式 IV 或按 RFC 8216 序号派生 IV）。
 - **清晰度选择**：列出 master playlist 的所有档位；默认最高码率。
 - **并发分片下载**：带重试 + 指数退避（可配 1–20）。
@@ -176,6 +177,8 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 4. 在弹窗查看进度，或打开 **下载管理器**（工具栏图标 → 列表图标）查看实时进度与历史。
 5. 文件进入**浏览器原生下载列表**。
 
+> **提示 — X（Twitter）：** 先在 x.com / twitter.com 播放视频，让 amplify m3u8 发出请求（Sniffls 会嗅探 `video.twimg.com`），再在弹窗里下载。
+
 ### 弹窗
 
 ![弹窗预览 — 检测到的流、清晰度选择、实时下载进度](docs/images/popup-preview.svg)
@@ -225,6 +228,7 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 - MVP **仅支持点播（VOD）**——直播录制后续规划。
 - DRM 加密流无法解密；将降级为原始 `.ts` 或明确报错。
 - Safari：无代理支持；与其他浏览器相同，使用隐藏页引擎宿主。
+- **X（Twitter）：** 公开 amplify HLS（CMAF）可用。私有/受保护媒体、DRM，或 CDN 被墙时仍会失败——访问不到 `video.twimg.com` 时请开代理。Live Spaces / 非 HLS 播放器不在范围内。
 
 ---
 
@@ -255,7 +259,8 @@ src/
 │  ├─ detection/           # webRequestObserver, urlNormalizer, qualityProbe, badge
 │  ├─ state/               # sessionStore, settingsStore, historyStore
 │  ├─ engine/              # engine, m3u8Parser, segmentPool, aesDecryptor,
-│  │                       # transmuxer, blobAssembler, hostManager, hostProtocol, hostRuntime
+│  │                       # transmuxer, blobAssembler, fmp4Merge (mediabunny),
+│  │                       # containerDetect, hostManager, hostProtocol, hostRuntime
 │  ├─ platform/            # browser shim, featureDetect, downloadsShim, proxyShim, messaging
 │  └─ types, errors, log
 ├─ components/         # React UI（Stich 风格设计系统）
@@ -268,8 +273,9 @@ tests/                 # 引擎 + 解析器单元测试
 ## 🧪 测试
 
 引擎核心用 Vitest 做单元测试：
-- `tests/m3u8Parser.test.ts` — master/media 播放列表、AES-128 密钥、字节范围、init segment。
+- `tests/m3u8Parser.test.ts` — master/media 播放列表、AES-128 密钥、字节范围、init segment、分离 AUDIO 组。
 - `tests/urlNormalizer.test.ts` — m3u8 识别、包装 `?url=` 解包、URL 归一化、文件名派生。
+- `tests/containerDetect.test.ts` — MPEG-TS 与 fMP4/CMAF 检测。
 - `tests/aesDecryptor.test.ts` — IV 派生、解密器直通/报错路径。
 
 ```bash

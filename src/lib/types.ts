@@ -31,6 +31,21 @@ export interface VariantInfo {
   frameRate?: number;
   /** Average bandwidth if EXT-X-STREAM-INF:AVERAGE-BANDWIDTH present. */
   averageBandwidth?: number;
+  /** EXT-X-STREAM-INF:AUDIO — links to a media group of TYPE=AUDIO. */
+  audioGroupId?: string;
+}
+
+/** One #EXT-X-MEDIA entry (audio/subtitles/…). */
+export interface MediaRendition {
+  type: 'AUDIO' | 'VIDEO' | 'SUBTITLES' | 'CLOSED-CAPTIONS' | string;
+  groupId: string;
+  name: string;
+  /** Absolute URI of the media playlist; absent when muxed into the video playlist. */
+  uri?: string;
+  language?: string;
+  default?: boolean;
+  autoselect?: boolean;
+  channels?: string;
 }
 
 /** One segment line from a media playlist. */
@@ -74,6 +89,13 @@ export interface ParsedPlaylist {
   /** true if #EXT-X-ENDLIST present (VOD, finite). */
   endList: boolean;
   variants: VariantInfo[];
+  /** Master-only: TYPE → groupId → renditions (e.g. AUDIO / "audio-128000"). */
+  mediaGroups?: {
+    AUDIO?: Record<string, MediaRendition[]>;
+    VIDEO?: Record<string, MediaRendition[]>;
+    SUBTITLES?: Record<string, MediaRendition[]>;
+    'CLOSED-CAPTIONS'?: Record<string, MediaRendition[]>;
+  };
   segments: Segment[];
   key?: KeyInfo;
   initSegment?: InitSegment;
