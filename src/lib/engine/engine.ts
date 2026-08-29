@@ -251,11 +251,13 @@ export class DownloadEngine {
     }
   }
 
-  /** Pause all running segment pools (in-flight requests finish). */
+  /** Pause all running segment pools (in-flight requests finish).
+   * No progress emit here — the SW broadcasts 'paused' the instant the user
+   * clicks, and a host-side emit would race it (and previously reset the
+   * counters with done:0/total:0). */
   pause(): void {
     this.paused = true;
     for (const p of this.pools) p.pause();
-    this.emit({ status: 'paused', done: 0, total: 0, bytesLoaded: 0 });
   }
 
   /** Resume previously paused segment pools. */

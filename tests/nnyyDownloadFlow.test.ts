@@ -164,6 +164,42 @@ describe('nnyy.in download flow (202597447.html) — live-shaped regression', ()
     expect(fetched).toEqual(Array.from({ length: N }, (_, i) => i));
   });
 
+  it('pause/resume: pool stops launching new fetches while paused, resumes after', async () => {
+    const N = 12;
+    const pl = parseMedia(N);
+    let fetchCount = 0;
+    const origFetch = globalThis.fetch;
+    // Gate each fetch behind a 10ms delay so we can observe pause behavior.
+    globalThis.fetch = (async (url: any) => {
+      fetchCount++;
+      await new Promise((r) => setTimeout(r, 10));
+      const seq = Number(String(url).match(/(\d{7})\.ts/)![1]);
+      return new Response(makeTsSegment(seq).buffer as ArrayBuffer, { status: 200 });
+    }) as any;
+    try {
+      const { SegmentPool } = await import('../src/lib/engine/segmentPool');
+      const pool = new SegmentPool({ concurrency: 2, retries: 1 });
+      const drain = (async () => {
+        for await (const _ of pool.run(pl.segments)) { /* drain */ }
+      })();
+
+      // Let the first concurrency-2 wave launch, then pause.
+      await new Promise((r) => setTimeout(r, 25));
+      const countAtPause = fetchCount;
+      pool.pause();
+      await new Promise((r) => setTimeout(r, 60));
+      // No new fetches may start while paused (in-flight ones may finish, but
+      // the backpressure loop must not launch replacements).
+      expect(fetchCount).toBeLessThanOrEqual(countAtPause + 2);
+
+      pool.resume();
+      await drain;
+      expect(fetchCount).toBe(N);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
   // ---------- 3. transmux + assemble stage (real mux.js) ----------
   it('TS path: transmuxes collected segments to fMP4 and assembles an MP4 blob', async () => {
     const N = 12;
