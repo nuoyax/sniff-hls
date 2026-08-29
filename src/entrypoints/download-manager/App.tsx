@@ -7,7 +7,7 @@ import { PageShell } from '@/components/PageShell';
 import { sendMessage } from '@/lib/platform/messaging';
 import { bapi } from '@/lib/platform/browser';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, translate, resolveLocale } from '@/lib/i18n';
 import type { DownloadProgress, HistoryEntry } from '@/lib/types';
 
 interface ActiveView {
@@ -47,7 +47,13 @@ async function deleteHistoryHard(h: HistoryEntry) {
 
 /** Double-click / ▶: open the downloaded file; fall back to showing its folder. */
 async function openHistoryFile(h: HistoryEntry) {
-  if (!h.downloadId) return;
+  if (!h.downloadId) {
+    // Records created before downloadId tracking can't be located — surface it
+    // instead of failing silently.
+    console.warn('[sniffls] no downloadId for', h.filename, '— re-download to enable open');
+    alert(translate(resolveLocale('auto'), 'manager.openFile.missing'));
+    return;
+  }
   try {
     const items = await bapi.downloads.search({ id: h.downloadId });
     const item = items?.[0];
@@ -56,12 +62,14 @@ async function openHistoryFile(h: HistoryEntry) {
     } else {
       await bapi.downloads.show(h.downloadId);
     }
-  } catch {
+  } catch (e) {
     // open() may be blocked; reveal the containing folder instead.
+    console.warn('[sniffls] open failed, trying show', e);
     try {
       await bapi.downloads.show(h.downloadId);
-    } catch {
-      /* nothing else we can do */
+    } catch (e2) {
+      console.warn('[sniffls] show failed too', e2);
+      alert(translate(resolveLocale('auto'), 'manager.openFile.missing'));
     }
   }
 }
