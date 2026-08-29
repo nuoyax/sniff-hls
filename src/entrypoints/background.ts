@@ -256,9 +256,16 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
   // a defense-in-depth (also normalizes for programmatic START_DOWNLOAD calls).
   const baseFilename = sanitizeFilename(req.payload.baseFilename || deriveBaseFilename(req.payload.url));
 
-  // Apply the user's configured download subfolder, if any.
-  const subfolder = (s.subfolder || '').trim().replace(/[<>:"/\\|?*]/g, '').replace(/^\/+|\/+$/g, '');
-  const fullFilename = subfolder ? `${subfolder}/${baseFilename}.mp4` : `${baseFilename}.mp4`;
+  // Apply the user's configured download directory, if any. Supports absolute
+  // paths (C:\Videos or /home/user/Videos) — chrome.downloads.filename accepts
+  // absolute paths on desktop. Strip only characters illegal in a path while
+  // preserving separators, drive letters and a leading '/'.
+  const dir = (s.downloadDir || '')
+    .trim()
+    .replace(/[<>:"|?*]/g, '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+  const fullFilename = dir ? `${dir}/${baseFilename}.mp4` : `${baseFilename}.mp4`;
 
   const job: DownloadJob = {
     id: jobId,

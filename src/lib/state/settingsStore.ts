@@ -11,7 +11,7 @@ export const SettingsSchema = z.object({
   format: z.enum(['mp4', 'ts', 'auto']).default('auto'),
   concurrency: z.number().int().min(1).max(20).default(8),
   defaultQuality: z.enum(['highest', 'lowest']).default('highest'),
-  subfolder: z.string().default('sniffls'),
+  downloadDir: z.string().default(''),
   proxy: z
     .object({
       mode: z.string().default('none'),

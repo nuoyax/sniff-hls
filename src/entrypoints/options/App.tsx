@@ -110,12 +110,18 @@ export default function App() {
             <option value="lowest">{t('downloads.quality.lowest')}</option>
           </select>
         </Row>
-        <Row label={t('downloads.subfolder')}>
-          <input
-            className="w-48 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
-            value={draft.subfolder}
-            onChange={(e) => update({ subfolder: e.target.value })}
-          />
+        <Row label={t('downloads.dir')}>
+          <div className="flex items-center gap-1.5">
+            <input
+              className="w-64 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
+              placeholder={t('downloads.dir.placeholder')}
+              value={draft.downloadDir}
+              onChange={(e) => update({ downloadDir: e.target.value })}
+            />
+            <Button variant="secondary" size="sm" onClick={() => pickDirectory((name) => update({ downloadDir: name }))}>
+              {t('downloads.dir.browse')}
+            </Button>
+          </div>
         </Row>
         <ToggleRow
           label={t('downloads.notify')}
@@ -166,6 +172,26 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+/**
+ * Folder picker for the download directory. The File System Access API only
+ * exposes the folder NAME (browsers never reveal absolute paths), so the
+ * picked name is applied to the draft and resolved by the browser against
+ * the default download location. A typed absolute path is also accepted.
+ */
+async function pickDirectory(onPick: (name: string) => void) {
+  const anyWin = window as any;
+  if (anyWin.showDirectoryPicker) {
+    try {
+      const handle = await anyWin.showDirectoryPicker();
+      onPick(handle.name);
+    } catch {
+      /* user canceled */
+    }
+  } else {
+    alert('请手动输入路径，例如 D:\\Videos 或 /Users/you/Videos');
+  }
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
