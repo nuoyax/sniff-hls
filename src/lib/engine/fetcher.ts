@@ -52,9 +52,11 @@ export async function fetchBytes(
       return new Uint8Array(buf);
     } catch (e) {
       lastErr = e;
-      // exponential backoff with jitter
-      const wait = Math.min(8000, 300 * 2 ** attempt) * (0.5 + Math.random());
-      await sleep(wait);
+      // exponential backoff with jitter (instant in vitest)
+      if ((globalThis as any).__VITEST__ !== true) {
+        const wait = Math.min(8000, 300 * 2 ** attempt) * (0.5 + Math.random());
+        await sleep(wait);
+      }
     } finally {
       clearTimeout(timer);
     }
