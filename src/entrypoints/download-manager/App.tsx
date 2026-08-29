@@ -30,6 +30,42 @@ async function resumeJob(jobId: string) {
   await sendMessage({ type: 'RESUME_DOWNLOAD', jobId });
 }
 
+/** Hard delete a history row: erase the file from disk + drop the entry. */
+async function deleteHistoryHard(h: HistoryEntry) {
+  // If the entry maps to a finished browser download, erase the file too.
+  if (h.downloadId) {
+    try {
+      const items = await (globalThis as any).browser?.downloads?.search?.({ id: h.downloadId });
+      if (items?.[0]) await (globalThis as any).browser.downloads.removeFile(h.downloadId);
+    } catch {
+      /* file already gone */
+    }
+  }
+  await removeHistory(h.id);
+}
+
+/** Double-click / ▶: open the downloaded file; fall back to showing its folder. */
+async function openHistoryFile(h: HistoryEntry) {
+  if (!h.downloadId) return;
+  try {
+    const b = (globalThis as any).browser;
+    const items = await b?.downloads?.search?.({ id: h.downloadId });
+    const item = items?.[0];
+    if (item?.exists && item.state === 'complete') {
+      await b.downloads.open(h.downloadId);
+    } else {
+      await b.downloads.show(h.downloadId);
+    }
+  } catch {
+    // open() may be blocked; reveal the containing folder instead.
+    try {
+      await (globalThis as any).browser?.downloads?.show?.(h.downloadId);
+    } catch {
+      /* nothing else we can do */
+    }
+  }
+}
+
 export default function App() {
   const [active, setActive] = useState<ActiveView[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -140,6 +176,8 @@ export default function App() {
               <li
                 key={h.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated p-3"
+                onDoubleClick={() => void openHistoryFile(h)}
+                title={t('manager.openFile')}
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm text-fg">{h.filename}</p>
@@ -160,7 +198,22 @@ export default function App() {
                   >
                     {h.status}
                   </Badge>
-                  <Button variant="ghost" size="sm" onClick={() => removeHistory(h.id).then(() => listHistory().then(setHistory))}>
+                  {h.status === 'complete' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void openHistoryFile(h)}
+                      title={t('manager.openFile')}
+                    >
+                      ▶
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void deleteHistoryHard(h).then(() => listHistory().then(setHistory))}
+                    title={t('manager.delete')}
+                  >
                     ✕
                   </Button>
                 </div>

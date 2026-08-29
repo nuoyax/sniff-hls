@@ -93,6 +93,7 @@ async function runJob(job: DownloadJob): Promise<void> {
               sizeBytes: result.blob.size,
               filename,
               format: result.format,
+              downloadId,
             },
           });
         } catch (e) {

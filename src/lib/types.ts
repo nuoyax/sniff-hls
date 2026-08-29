@@ -170,4 +170,6 @@ export interface HistoryEntry {
   status: DownloadStatus;
   error?: string;
   variant?: string;
+  /** Browser download id (chrome.downloads) for open/show actions. */
+  downloadId?: number;
 }
