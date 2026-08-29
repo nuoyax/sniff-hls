@@ -186,11 +186,6 @@ export default function App() {
     [tabId, pageUrl, pageTitle],
   );
 
-  const cancel = useCallback(async (jobId: string, url: string) => {
-    await sendMessage({ type: 'CANCEL_DOWNLOAD', jobId });
-    setActive((a) => ({ ...a, [url]: { ...a[url], status: 'canceled' } }));
-  }, []);
-
   if (loading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-fg-muted">Loading…</div>
@@ -248,7 +243,6 @@ export default function App() {
                 pageTitle={pageTitle}
                 active={active[d.url]}
                 onDownload={(v, fname) => startDownload(d.url, v, fname)}
-                onCancel={() => active[d.url] && cancel(active[d.url].jobId, d.url)}
                 onPauseResume={(pause) =>
                   active[d.url] &&
                   sendMessage({
@@ -284,14 +278,12 @@ function StreamItem({
   pageTitle,
   active,
   onDownload,
-  onCancel,
   onPauseResume,
 }: {
   item: DetectedItem;
   pageTitle?: string;
   active?: ActiveDownload;
   onDownload: (variant?: VariantInfo, filename?: string) => void;
-  onCancel: () => void;
   onPauseResume: (pause: boolean) => void;
 }) {
   const variants = item.variants ?? [];
@@ -342,18 +334,12 @@ function StreamItem({
               <Button variant="ghost" size="sm" onClick={() => onPauseResume(false)} title={t('manager.pause')}>
                 ⏸
               </Button>
-              <Button variant="ghost" size="sm" onClick={onCancel} title={t('popup.cancel')}>
-                ✕
-              </Button>
             </>
           ) : active?.status === 'paused' ? (
             <>
               <Badge tone="warn">{t('manager.pause')}</Badge>
               <Button variant="ghost" size="sm" onClick={() => onPauseResume(true)} title={t('manager.resume')}>
                 ▶
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onCancel} title={t('popup.cancel')}>
-                ✕
               </Button>
             </>
           ) : isDone ? (
