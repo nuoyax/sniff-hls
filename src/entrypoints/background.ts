@@ -216,6 +216,8 @@ async function handleMessage(req: Request): Promise<Response> {
     }
     case 'APPLY_PROXY': {
       const r = await applyProxy(req.config);
+      // Persist the applied config so it survives SW restarts / browser relaunch.
+      if (r.ok) await setSettings({ proxy: req.config });
       return { ok: r.ok, error: r.ok ? undefined : r.message, data: r.message };
     }
     case 'CLEAR_PROXY': {
