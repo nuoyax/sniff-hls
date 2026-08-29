@@ -51,9 +51,9 @@ const en: Dict = {
   'proxy.failed': 'Failed',
   'proxy.note':
     'Note: extension network requests automatically use your browser/system proxy. Configure this only for a per-extension override.',
-  'privacy.telemetry': 'Anonymous telemetry',
+  'privacy.telemetry': 'Usage statistics',
   'privacy.telemetry.hint':
-    'Off by default. When on, only feature-usage counters are sent — never URLs, page titles, or file contents.',
+    'Off by default. When enabled, only anonymized feature-usage counters are reported — never URLs, page titles, or file contents.',
   'privacy.debug': 'Debug logging',
   // Popup
   'popup.scan': 'Scan page',
@@ -125,8 +125,8 @@ const zh: Dict = {
   'proxy.cleared': '代理已清除',
   'proxy.failed': '失败',
   'proxy.note': '注意：扩展的网络请求会自动使用浏览器/系统代理。仅需要在针对扩展单独覆盖时才配置此项。',
-  'privacy.telemetry': '匿名遥测',
-  'privacy.telemetry.hint': '默认关闭。开启后仅发送功能使用计数，绝不会发送 URL、页面标题或文件内容。',
+  'privacy.telemetry': '使用情况统计',
+  'privacy.telemetry.hint': '默认关闭。开启后仅上报匿名的功能使用计数，绝不会包含 URL、页面标题或文件内容。',
   'privacy.debug': '调试日志',
   'popup.scan': '扫描页面',
   'popup.manager': '下载管理',

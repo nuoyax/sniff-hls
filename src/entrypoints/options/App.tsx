@@ -9,7 +9,6 @@ import type { OutputFormat } from '@/lib/types';
 
 export default function App() {
   const [s, setS] = useState<Settings | null>(null);
-  const [proxyMsg, setProxyMsg] = useState('');
   const { t } = useI18n();
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -128,16 +127,7 @@ export default function App() {
       <Section title={t('section.proxy')}>
         <ProxyForm
           config={draft.proxy as ProxyConfig}
-          onApply={async (cfg) => {
-            const r = await sendMessage({ type: 'APPLY_PROXY', config: cfg });
-            setProxyMsg(r.ok ? t('proxy.applied') : `${t('proxy.failed')}: ${r.error}`);
-            await update({ proxy: cfg });
-          }}
-          onClear={async () => {
-            await sendMessage({ type: 'CLEAR_PROXY' });
-            setProxyMsg(t('proxy.cleared'));
-          }}
-          message={proxyMsg}
+          onApply={(cfg) => update({ proxy: cfg })}
         />
         <p className="mt-2 text-[11px] text-fg-muted">{t('proxy.note')}</p>
       </Section>
@@ -156,10 +146,12 @@ export default function App() {
         Sniffls · v0.1.0 · MIT
       </p>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex items-center gap-3">
+        <Button variant="primary" onClick={save} disabled={!dirty}>
+          {t('settings.save')}
+        </Button>
         <Button
           variant="secondary"
-          size="sm"
           onClick={() => {
             const { schemaVersion: _sv, ...defaults } = DEFAULT_SETTINGS;
             setDraft({ ...defaults, schemaVersion: draft.schemaVersion });
@@ -168,9 +160,6 @@ export default function App() {
           }}
         >
           {t('settings.reset')}
-        </Button>
-        <Button variant="primary" size="sm" onClick={save} disabled={!dirty}>
-          {t('settings.save')}
         </Button>
         {savedMsg && <span className="text-[11px] text-ok">{savedMsg}</span>}
         {dirty && !savedMsg && <span className="text-[11px] text-warn">{t('settings.unsaved')}</span>}
@@ -234,13 +223,9 @@ function ToggleRow({
 function ProxyForm({
   config,
   onApply,
-  onClear,
-  message,
 }: {
   config: ProxyConfig;
   onApply: (cfg: ProxyConfig) => void;
-  onClear: () => void;
-  message: string;
 }) {
   const { t } = useI18n();
   const [cfg, setCfg] = useState<ProxyConfig>(config);
@@ -270,12 +255,6 @@ function ProxyForm({
           value={cfg.port || ''}
           onChange={(e) => setCfg({ ...cfg, port: Number(e.target.value) })}
         />
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="primary" size="sm" onClick={() => onApply(cfg)}>
-          {t('proxy.apply')}
-        </Button>
-        {message && <span className="text-[11px] text-fg-muted">{message}</span>}
       </div>
     </div>
   );
