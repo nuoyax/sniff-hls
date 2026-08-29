@@ -20,7 +20,9 @@ interface ActiveView {
 export default function App() {
   const [active, setActive] = useState<ActiveView[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [page, setPage] = useState(1);
   const { t } = useI18n();
+  const pageSize = 20;
 
   useEffect(() => {
     listHistory().then(setHistory);
@@ -51,6 +53,10 @@ export default function App() {
       clearInterval(id);
     };
   }, []);
+
+  const pageCount = Math.max(1, Math.ceil(history.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paged = history.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -99,7 +105,7 @@ export default function App() {
           <EmptyState title={t('manager.history.empty.title')} hint={t('manager.history.empty.hint')} />
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {history.map((h) => (
+            {paged.map((h) => (
               <li
                 key={h.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated p-3"
@@ -130,6 +136,19 @@ export default function App() {
               </li>
             ))}
           </ul>
+        )}
+        {pageCount > 1 && (
+          <div className="mt-3 flex items-center justify-center gap-3 text-sm text-fg-muted">
+            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              ‹ {t('pager.prev')}
+            </Button>
+            <span className="text-[11px]">
+              {t('pager.page')} {page} / {pageCount}
+            </span>
+            <Button variant="ghost" size="sm" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>
+              {t('pager.next')} ›
+            </Button>
+          </div>
         )}
       </section>
     </div>

@@ -77,6 +77,9 @@ const en: Dict = {
   'manager.active': 'Active',
   'manager.active.empty': 'No active downloads.',
   'manager.history': 'History',
+  'pager.prev': 'Prev',
+  'pager.next': 'Next',
+  'pager.page': 'Page',
   'manager.history.empty.title': 'No downloads yet',
   'manager.history.empty.hint': 'Your completed and failed downloads will appear here.',
 };
@@ -145,6 +148,9 @@ const zh: Dict = {
   'manager.active': '进行中',
   'manager.active.empty': '暂无进行中的下载。',
   'manager.history': '历史记录',
+  'pager.prev': '上一页',
+  'pager.next': '下一页',
+  'pager.page': '第',
   'manager.history.empty.title': '还没有下载',
   'manager.history.empty.hint': '已完成和失败的下载会显示在这里。',
 };
