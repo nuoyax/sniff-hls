@@ -102,17 +102,6 @@ export default function App() {
           checked={s.notifyOnComplete}
           onChange={(v) => update({ notifyOnComplete: v })}
         />
-        <Row label={t('settings.language')}>
-          <select
-            className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
-            value={s.locale}
-            onChange={(e) => update({ locale: e.target.value as Settings['locale'] })}
-          >
-            <option value="auto">{t('settings.language.auto')}</option>
-            <option value="en">English</option>
-            <option value="zh-CN">简体中文</option>
-          </select>
-        </Row>
       </Section>
 
       <Section title={t('section.proxy')}>
