@@ -3,7 +3,7 @@ import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { ProgressBar } from '@/components/Progress';
 import { EmptyState } from '@/components/EmptyState';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
 import { sendMessage } from '@/lib/platform/messaging';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
 import { useI18n } from '@/lib/i18n';
@@ -59,19 +59,18 @@ export default function App() {
   const paged = history.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <PageHeader
-        title={t('manager.title')}
-        subtitle={t('manager.subtitle')}
-        showSettings
-        actions={
-          history.length > 0 ? (
-            <Button variant="ghost" size="sm" onClick={() => clearHistory().then(() => listHistory().then(setHistory))}>
-              {t('manager.clearHistory')}
-            </Button>
-          ) : undefined
-        }
-      />
+    <PageShell
+      page="manager"
+      title={t('manager.title')}
+      subtitle={t('manager.subtitle')}
+      actions={
+        history.length > 0 ? (
+          <Button variant="ghost" size="sm" onClick={() => clearHistory().then(() => listHistory().then(setHistory))}>
+            {t('manager.clearHistory')}
+          </Button>
+        ) : undefined
+      }
+    >
 
       <section className="mb-8">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('manager.active')}</h2>
@@ -151,7 +150,7 @@ export default function App() {
           </div>
         )}
       </section>
-    </div>
+    </PageShell>
   );
 }
 

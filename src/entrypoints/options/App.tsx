@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
-import { PageHeader } from '@/components/PageHeader';
+import { PageShell } from '@/components/PageShell';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS, type Settings } from '@/lib/state/settingsStore';
 import { sendMessage } from '@/lib/platform/messaging';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -60,8 +60,7 @@ export default function App() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
+    <PageShell page="settings" title={t('settings.title')} subtitle={t('settings.subtitle')}>
 
       <Section title={t('section.detection')}>
         <ToggleRow
@@ -170,7 +169,7 @@ export default function App() {
         {savedMsg && <span className="text-[11px] text-ok">{savedMsg}</span>}
         {dirty && !savedMsg && <span className="text-[11px] text-warn">{t('settings.unsaved')}</span>}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
