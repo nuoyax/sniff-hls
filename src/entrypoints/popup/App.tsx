@@ -125,8 +125,9 @@ export default function App() {
     setTimeout(() => refresh(tabId), 800);
   }, [tabId, refresh]);
 
-  const openOptions = useCallback(() => {
-    chrome.runtime.openOptionsPage?.() ?? browser.runtime.openOptionsPage();
+  const openOptions = useCallback(async () => {
+    const url = chrome.runtime.getURL('/options.html');
+    await chrome.tabs.create({ url });
   }, []);
 
   const openManager = useCallback(async () => {
