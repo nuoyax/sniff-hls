@@ -34,7 +34,12 @@ export function PageHeader({
         {actions}
         <LanguageSwitch />
         {showSettings && (
-          <Button variant="ghost" size="sm" onClick={() => window.open('/options.html')} title={t('header.settings')}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.open(chrome.runtime.getURL('options.html'))}
+            title={t('header.settings')}
+          >
             <Settings className="h-3.5 w-3.5" />
           </Button>
         )}

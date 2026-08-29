@@ -128,8 +128,9 @@ export default function App() {
   }, [tabId, refresh]);
 
   const openOptions = useCallback(async () => {
-    const url = chrome.runtime.getURL('/options.html');
-    await chrome.tabs.create({ url });
+    const b = (typeof browser !== 'undefined' ? browser : chrome) as any;
+    const url = b.runtime.getURL('options.html');
+    await b.tabs.create({ url });
   }, []);
 
   const openManager = useCallback(async () => {
