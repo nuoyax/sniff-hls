@@ -17,7 +17,7 @@ export function EmptyState({
         {/* Breathing halo */}
         <span className="pointer-events-none absolute inset-0 rounded-full bg-accent/40 animate-halo" />
         <span className="pointer-events-none absolute inset-0 rounded-full bg-accent/25 animate-halo [animation-delay:1s]" />
-        <Search className="relative h-5 w-5" />
+        <Search className="relative h-5 w-5 text-white" />
       </div>
       <div>
         <p className="text-sm font-medium text-fg">{title}</p>
