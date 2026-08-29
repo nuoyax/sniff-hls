@@ -391,7 +391,7 @@ async function onHostComplete(jobId: string, result: { sizeBytes: number; filena
         type: 'basic',
         iconUrl: bapi.runtime.getURL('icon/48.png'),
         title: 'Download complete',
-        message: result.filename,
+        message: `${result.filename} · ${formatBytes(result.sizeBytes)}`,
       });
     } catch {
       /* noop */
@@ -407,7 +407,34 @@ async function onHostError(jobId: string, error: { code: string; message: string
   j.status = 'error';
   await updateHistory(j.historyId, { status: 'error', error: error.message });
   broadcastProgress({ jobId, status: 'error', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0, error: error.message });
+  const s = await getSettings();
+  if (s.notifyOnComplete && capabilities.notifications) {
+    try {
+      bapi.notifications.create(`err_${jobId}`, {
+        type: 'basic',
+        iconUrl: bapi.runtime.getURL('icon/48.png'),
+        title: `Download failed (${error.code})`,
+        message: `${j.baseFilename} · ${error.message}`,
+      });
+    } catch {
+      /* noop */
+    }
+  }
   activeJobs.delete(jobId);
+}
+
+// Notification click → open the download manager page.
+bapi.notifications?.onClicked?.addListener((notifId: string) => {
+  if (notifId.startsWith('done_') || notifId.startsWith('err_')) {
+    void openOrFocusPage('download-manager.html');
+  }
+});
+
+function formatBytes(n: number): string {
+  if (!n) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(n) / Math.log(1024));
+  return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
 }
 
 // ===================== progress fan-out (SW → UI ports) =====================
