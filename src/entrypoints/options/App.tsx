@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/Button';
+import { PageHeader } from '@/components/PageHeader';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS, type Settings } from '@/lib/state/settingsStore';
 import { sendMessage } from '@/lib/platform/messaging';
+import { useI18n, type Locale } from '@/lib/i18n';
 import type { ProxyConfig } from '@/lib/platform/proxyShim';
 import type { OutputFormat } from '@/lib/types';
 
 export default function App() {
   const [s, setS] = useState<Settings | null>(null);
   const [proxyMsg, setProxyMsg] = useState('');
+  const { t } = useI18n();
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -38,37 +41,36 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
-      <h1 className="text-xl font-semibold text-fg">Sniffls — Settings</h1>
-      <p className="mt-1 text-sm text-fg-muted">Tune detection, downloads, and proxy.</p>
+      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
 
-      <Section title="Detection">
+      <Section title={t('section.detection')}>
         <ToggleRow
-          label="Auto-detect m3u8 on every page"
-          hint="Sniffs network requests for m3u8 URLs and shows a badge count."
+          label={t('detect.auto.label')}
+          hint={t('detect.auto.hint')}
           checked={s.autoDetect}
           onChange={(v) => update({ autoDetect: v })}
         />
         <ToggleRow
-          label="DOM scan on demand"
-          hint="When you click refresh, also scan the page HTML for embedded m3u8."
+          label={t('detect.dom.label')}
+          hint={t('detect.dom.hint')}
           checked={s.domScan}
           onChange={(v) => update({ domScan: v })}
         />
       </Section>
 
-      <Section title="Downloads">
-        <Row label="Output format">
+      <Section title={t('section.downloads')}>
+        <Row label={t('downloads.format')}>
           <select
             className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
             value={s.format}
             onChange={(e) => update({ format: e.target.value as OutputFormat })}
           >
-            <option value="auto">Auto (MP4, fall back to TS)</option>
-            <option value="mp4">Always MP4</option>
-            <option value="ts">Always TS (raw)</option>
+            <option value="auto">{t('downloads.format.auto')}</option>
+            <option value="mp4">{t('downloads.format.mp4')}</option>
+            <option value="ts">{t('downloads.format.ts')}</option>
           </select>
         </Row>
-        <Row label={`Concurrent segments: ${s.concurrency}`}>
+        <Row label={`${t('downloads.concurrency')}: ${s.concurrency}`}>
           <input
             type="range"
             min={1}
@@ -78,17 +80,17 @@ export default function App() {
             className="w-48 accent-[rgb(var(--accent))]"
           />
         </Row>
-        <Row label="Default quality">
+        <Row label={t('downloads.quality')}>
           <select
             className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
             value={s.defaultQuality}
             onChange={(e) => update({ defaultQuality: e.target.value as any })}
           >
-            <option value="highest">Highest bandwidth</option>
-            <option value="lowest">Lowest bandwidth</option>
+            <option value="highest">{t('downloads.quality.highest')}</option>
+            <option value="lowest">{t('downloads.quality.lowest')}</option>
           </select>
         </Row>
-        <Row label="Download subfolder">
+        <Row label={t('downloads.subfolder')}>
           <input
             className="w-48 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
             value={s.subfolder}
@@ -96,39 +98,48 @@ export default function App() {
           />
         </Row>
         <ToggleRow
-          label="Notify when a download completes"
+          label={t('downloads.notify')}
           checked={s.notifyOnComplete}
           onChange={(v) => update({ notifyOnComplete: v })}
         />
+        <Row label={t('settings.language')}>
+          <select
+            className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
+            value={s.locale}
+            onChange={(e) => update({ locale: e.target.value as Settings['locale'] })}
+          >
+            <option value="auto">{t('settings.language.auto')}</option>
+            <option value="en">English</option>
+            <option value="zh-CN">简体中文</option>
+          </select>
+        </Row>
       </Section>
 
-      <Section title="Proxy">
+      <Section title={t('section.proxy')}>
         <ProxyForm
           config={s.proxy as ProxyConfig}
           onApply={async (cfg) => {
             const r = await sendMessage({ type: 'APPLY_PROXY', config: cfg });
-            setProxyMsg(r.ok ? 'Proxy applied' : `Failed: ${r.error}`);
+            setProxyMsg(r.ok ? t('proxy.applied') : `${t('proxy.failed')}: ${r.error}`);
             await update({ proxy: cfg });
           }}
           onClear={async () => {
             await sendMessage({ type: 'CLEAR_PROXY' });
-            setProxyMsg('Proxy cleared');
+            setProxyMsg(t('proxy.cleared'));
           }}
           message={proxyMsg}
         />
-        <p className="mt-2 text-[11px] text-fg-muted">
-          Note: extension network requests automatically use your browser/system proxy. Configure this only for a per-extension override.
-        </p>
+        <p className="mt-2 text-[11px] text-fg-muted">{t('proxy.note')}</p>
       </Section>
 
-      <Section title="Privacy">
+      <Section title={t('section.privacy')}>
         <ToggleRow
-          label="Anonymous telemetry"
-          hint="Off by default. When on, only feature-usage counters are sent — never URLs, page titles, or file contents."
+          label={t('privacy.telemetry')}
+          hint={t('privacy.telemetry.hint')}
           checked={s.telemetry}
           onChange={(v) => update({ telemetry: v })}
         />
-        <ToggleRow label="Debug logging" checked={s.debug} onChange={(v) => update({ debug: v })} />
+        <ToggleRow label={t('privacy.debug')} checked={s.debug} onChange={(v) => update({ debug: v })} />
       </Section>
 
       <p className="mt-8 text-[11px] text-fg-muted">
@@ -175,14 +186,15 @@ function ToggleRow({
       </div>
       <button
         onClick={() => onChange(!checked)}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+        aria-checked={checked}
+        role="switch"
+        className={`relative inline-block h-6 w-11 shrink-0 rounded-full border-0 p-0 transition-colors ${
           checked ? 'bg-accent' : 'bg-border'
         }`}
       >
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
+          className="absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow"
+          style={{ left: checked ? '22px' : '3px', transition: 'left 150ms ease' }}
         />
       </button>
     </div>
@@ -200,6 +212,7 @@ function ProxyForm({
   onClear: () => void;
   message: string;
 }) {
+  const { t } = useI18n();
   const [cfg, setCfg] = useState<ProxyConfig>(config);
   return (
     <div className="flex flex-col gap-2">
@@ -209,19 +222,19 @@ function ProxyForm({
           value={cfg.mode}
           onChange={(e) => setCfg({ ...cfg, mode: e.target.value as ProxyConfig['mode'] })}
         >
-          <option value="none">No proxy / System</option>
+          <option value="none">{t('proxy.mode.none')}</option>
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
           <option value="socks">SOCKS5</option>
         </select>
         <input
-          placeholder="host"
+          placeholder={t('proxy.host')}
           className="flex-1 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
           value={cfg.host || ''}
           onChange={(e) => setCfg({ ...cfg, host: e.target.value })}
         />
         <input
-          placeholder="port"
+          placeholder={t('proxy.port')}
           type="number"
           className="w-20 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
           value={cfg.port || ''}
@@ -230,10 +243,10 @@ function ProxyForm({
       </div>
       <div className="flex items-center gap-2">
         <Button variant="primary" size="sm" onClick={() => onApply(cfg)}>
-          Apply
+          {t('proxy.apply')}
         </Button>
         <Button variant="secondary" size="sm" onClick={onClear}>
-          Clear
+          {t('proxy.clear')}
         </Button>
         {message && <span className="text-[11px] text-fg-muted">{message}</span>}
       </div>

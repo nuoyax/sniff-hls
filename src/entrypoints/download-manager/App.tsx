@@ -3,8 +3,10 @@ import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { ProgressBar } from '@/components/Progress';
 import { EmptyState } from '@/components/EmptyState';
+import { PageHeader } from '@/components/PageHeader';
 import { sendMessage } from '@/lib/platform/messaging';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
+import { useI18n } from '@/lib/i18n';
 import type { DownloadProgress, HistoryEntry } from '@/lib/types';
 
 interface ActiveView {
@@ -18,6 +20,7 @@ interface ActiveView {
 export default function App() {
   const [active, setActive] = useState<ActiveView[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const { t } = useI18n();
 
   useEffect(() => {
     listHistory().then(setHistory);
@@ -51,23 +54,24 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-fg">Download Manager</h1>
-          <p className="text-sm text-fg-muted">Live downloads and history.</p>
-        </div>
-        {history.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => clearHistory().then(() => listHistory().then(setHistory))}>
-            Clear history
-          </Button>
-        )}
-      </header>
+      <PageHeader
+        title={t('manager.title')}
+        subtitle={t('manager.subtitle')}
+        showSettings
+        actions={
+          history.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => clearHistory().then(() => listHistory().then(setHistory))}>
+              {t('manager.clearHistory')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       <section className="mb-8">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Active</h2>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('manager.active')}</h2>
         {active.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-fg-muted">
-            No active downloads.
+            {t('manager.active.empty')}
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -90,9 +94,9 @@ export default function App() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">History</h2>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('manager.history')}</h2>
         {history.length === 0 ? (
-          <EmptyState title="No downloads yet" hint="Your completed and failed downloads will appear here." />
+          <EmptyState title={t('manager.history.empty.title')} hint={t('manager.history.empty.hint')} />
         ) : (
           <ul className="flex flex-col gap-1.5">
             {history.map((h) => (
