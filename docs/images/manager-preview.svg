@@ -23,9 +23,6 @@
   <rect x="20" y="94" width="10" height="10" rx="2" fill="none" stroke="#64748b" stroke-width="1.4"/>
   <circle cx="25" cy="99" r="2" fill="none" stroke="#64748b" stroke-width="1.2"/>
   <text x="38" y="103" font-size="10" fill="#64748b">Settings</text>
-  <!-- language switch at sidebar bottom -->
-  <rect x="10" y="340" width="100" height="24" rx="7" fill="#ffffff" stroke="#e2e8f0"/>
-  <text x="22" y="356" font-size="9" fill="#475569">🌐 中文</text>
 
   <!-- Content header -->
   <text x="140" y="34" font-size="14" font-weight="700" fill="#0f172a">Downloads</text>
