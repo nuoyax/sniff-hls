@@ -32,6 +32,10 @@ function handleHostCommand(msg: any): void {
     void runJob(msg.job as DownloadJob);
   } else if (msg.kind === 'CANCEL' && msg.jobId) {
     engines.get(msg.jobId)?.cancel();
+  } else if (msg.kind === 'PAUSE' && msg.jobId) {
+    engines.get(msg.jobId)?.pause();
+  } else if (msg.kind === 'RESUME' && msg.jobId) {
+    engines.get(msg.jobId)?.resume();
   }
 }
 

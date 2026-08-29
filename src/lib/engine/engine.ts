@@ -37,6 +37,8 @@ interface ResolvedTracks {
 
 export class DownloadEngine {
   private aborted = false;
+  private paused = false;
+  private pools = new Set<import('./segmentPool').SegmentPool>();
   private transmuxer: TsTransmuxer | null = null;
   private mp4Failed = false;
   /** Raw decrypted segment bytes (TS path fallback). */
@@ -234,14 +236,32 @@ export class DownloadEngine {
       onSegmentDone,
       onProgress: (done, _total, bytes) => {
         this.emit({
-          status: 'fetching',
+          status: this.paused ? 'paused' : 'fetching',
           done,
           total: playlist.segments.length,
           bytesLoaded: bytes,
         });
       },
     });
-    yield* pool.run(playlist.segments);
+    this.pools.add(pool);
+    try {
+      yield* pool.run(playlist.segments);
+    } finally {
+      this.pools.delete(pool);
+    }
+  }
+
+  /** Pause all running segment pools (in-flight requests finish). */
+  pause(): void {
+    this.paused = true;
+    for (const p of this.pools) p.pause();
+    this.emit({ status: 'paused', done: 0, total: 0, bytesLoaded: 0 });
+  }
+
+  /** Resume previously paused segment pools. */
+  resume(): void {
+    this.paused = false;
+    for (const p of this.pools) p.resume();
   }
 
   /** Classic TS segments → mux.js → MP4 (or raw .ts fallback). */

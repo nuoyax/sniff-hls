@@ -208,6 +208,26 @@ async function handleMessage(req: Request): Promise<Response> {
       cancelJob(req.jobId);
       return { ok: true };
     }
+    case 'PAUSE_DOWNLOAD': {
+      await sendToHost({ __host: true, kind: 'PAUSE', jobId: req.jobId }).catch(() => {});
+      const j = activeJobs.get(req.jobId);
+      if (j) {
+        j.status = 'paused';
+        broadcastProgress({ jobId: req.jobId, status: 'paused', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0 });
+        void updateHistory(j.historyId, { status: 'paused' });
+      }
+      return { ok: true };
+    }
+    case 'RESUME_DOWNLOAD': {
+      await sendToHost({ __host: true, kind: 'RESUME', jobId: req.jobId }).catch(() => {});
+      const j = activeJobs.get(req.jobId);
+      if (j) {
+        j.status = 'fetching';
+        broadcastProgress({ jobId: req.jobId, status: 'fetching', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0 });
+        void updateHistory(j.historyId, { status: 'fetching' });
+      }
+      return { ok: true };
+    }
     case 'GET_ACTIVE': {
       return { ok: true, data: Object.fromEntries(activeJobs) };
     }
@@ -318,6 +338,8 @@ function cancelJob(jobId: string) {
   const j = activeJobs.get(jobId);
   if (!j) return;
   j.engine?.cancel();
+  // Engine runs in the host context — tell it to cancel too (fire-and-forget).
+  void sendToHost({ __host: true, kind: 'CANCEL', jobId }).catch(() => {});
   j.status = 'canceled';
   void updateHistory(j.historyId, { status: 'canceled' });
   broadcastProgress({

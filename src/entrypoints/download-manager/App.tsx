@@ -17,6 +17,19 @@ interface ActiveView {
   filename?: string;
 }
 
+/** Cancel the engine job behind an active row. */
+async function cancelJob(jobId: string) {
+  await sendMessage({ type: 'CANCEL_DOWNLOAD', jobId });
+}
+
+async function pauseJob(jobId: string) {
+  await sendMessage({ type: 'PAUSE_DOWNLOAD', jobId });
+}
+
+async function resumeJob(jobId: string) {
+  await sendMessage({ type: 'RESUME_DOWNLOAD', jobId });
+}
+
 export default function App() {
   const [active, setActive] = useState<ActiveView[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -80,20 +93,39 @@ export default function App() {
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
-            {active.map((a) => (
-              <li key={a.jobId} className="rounded-xl border border-border bg-bg-elevated p-3 shadow-card">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-[11px] text-fg-muted" title={a.url}>
-                    {a.url}
-                  </span>
-                  <Badge tone={a.status === 'downloading' ? 'ok' : 'accent'}>{a.status}</Badge>
-                </div>
-                <div className="mt-2">
-                  <ProgressBar value={a.ratio} />
-                  <span className="mt-1 block text-[11px] text-fg-muted">{Math.round(a.ratio * 100)}%</span>
-                </div>
-              </li>
-            ))}
+            {active.map((a) => {
+              const isPaused = a.status === 'paused';
+              const running = !isPaused && a.status !== 'complete' && a.status !== 'error' && a.status !== 'canceled';
+              return (
+                <li key={a.jobId} className="rounded-xl border border-border bg-bg-elevated p-3 shadow-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] text-fg-muted" title={a.url}>
+                      {a.url}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Badge tone={a.status === 'downloading' ? 'ok' : a.status === 'paused' ? 'warn' : 'accent'}>{a.status}</Badge>
+                      {running && (
+                        <Button variant="ghost" size="sm" onClick={() => pauseJob(a.jobId)} title={t('manager.pause')}>
+                          ⏸
+                        </Button>
+                      )}
+                      {isPaused && (
+                        <Button variant="ghost" size="sm" onClick={() => resumeJob(a.jobId)} title={t('manager.resume')}>
+                          ▶
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => cancelJob(a.jobId)} title={t('popup.cancel')}>
+                        ✕
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <ProgressBar value={a.ratio} />
+                    <span className="mt-1 block text-[11px] text-fg-muted">{Math.round(a.ratio * 100)}%</span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

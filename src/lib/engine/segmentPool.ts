@@ -42,10 +42,30 @@ export class SegmentPool {
   private buffered = 0;
   private bytesLoaded = 0;
   private done = 0;
+  /** When set, new segment launches are held back (pause support). */
+  private paused = false;
+  private resumeWaiters: (() => void)[] = [];
 
   constructor(opts: PoolOptions) {
     this.opts = opts;
     this.decryptor = opts.decryptor ?? null;
+  }
+
+  /** Pause launching new segments (in-flight requests finish). */
+  pause(): void {
+    this.paused = true;
+  }
+
+  /** Resume launching segments. */
+  resume(): void {
+    this.paused = false;
+    for (const w of this.resumeWaiters.splice(0)) w();
+  }
+
+  private async waitWhilePaused(): Promise<void> {
+    while (this.paused) {
+      await new Promise<void>((r) => this.resumeWaiters.push(r));
+    }
   }
 
   async *run(segments: Segment[]): AsyncIterable<SegmentResult> {
@@ -57,7 +77,10 @@ export class SegmentPool {
     const skip = this.opts.skipIndices;
 
     const launch = (seg: Segment) => {
-      const promise = this.fetchOne(seg).catch((e) => {
+      const promise = (async () => {
+        await this.waitWhilePaused();
+        return this.fetchOne(seg);
+      })().catch((e) => {
         throw e;
       });
       queue.push({ segment: seg, promise, index: inputIndex++ });
@@ -103,6 +126,10 @@ export class SegmentPool {
         inputIndex < segments.length &&
         this.buffered < (this.opts.maxBufferedBytes ?? 256 * 1024 * 1024)
       ) {
+        if (this.paused) {
+          await this.waitWhilePaused();
+          continue;
+        }
         if (skip?.has(segments[inputIndex].sequence)) {
           inputIndex++;
           continue;

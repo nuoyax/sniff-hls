@@ -108,6 +108,7 @@ export type OutputFormat = 'mp4' | 'ts' | 'auto';
 export type DownloadStatus =
   | 'queued'
   | 'fetching'
+  | 'paused'
   | 'decrypting'
   | 'transmuxing'
   | 'assembling'

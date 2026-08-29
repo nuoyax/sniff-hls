@@ -246,6 +246,13 @@ export default function App() {
                 active={active[d.url]}
                 onDownload={(v, fname) => startDownload(d.url, v, fname)}
                 onCancel={() => active[d.url] && cancel(active[d.url].jobId, d.url)}
+                onPauseResume={(pause) =>
+                  active[d.url] &&
+                  sendMessage({
+                    type: pause ? 'PAUSE_DOWNLOAD' : 'RESUME_DOWNLOAD',
+                    jobId: active[d.url].jobId,
+                  })
+                }
               />
             ))}
           </ul>
@@ -275,12 +282,14 @@ function StreamItem({
   active,
   onDownload,
   onCancel,
+  onPauseResume,
 }: {
   item: DetectedItem;
   pageTitle?: string;
   active?: ActiveDownload;
   onDownload: (variant?: VariantInfo, filename?: string) => void;
   onCancel: () => void;
+  onPauseResume: (pause: boolean) => void;
 }) {
   const variants = item.variants ?? [];
   const best = variants.length ? variants[variants.length - 1] : undefined;
@@ -327,6 +336,19 @@ function StreamItem({
                 <ProgressRing value={active!.ratio} />
                 {Math.round((active!.ratio || 0) * 100)}%
               </span>
+              <Button variant="ghost" size="sm" onClick={() => onPauseResume(false)} title={t('manager.pause')}>
+                ⏸
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onCancel} title={t('popup.cancel')}>
+                ✕
+              </Button>
+            </>
+          ) : active?.status === 'paused' ? (
+            <>
+              <Badge tone="warn">{t('manager.pause')}</Badge>
+              <Button variant="ghost" size="sm" onClick={() => onPauseResume(true)} title={t('manager.resume')}>
+                ▶
+              </Button>
               <Button variant="ghost" size="sm" onClick={onCancel} title={t('popup.cancel')}>
                 ✕
               </Button>
