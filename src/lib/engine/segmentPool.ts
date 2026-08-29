@@ -54,6 +54,9 @@ export class SegmentPool {
   /** Pause launching new segments (in-flight requests finish). */
   pause(): void {
     this.paused = true;
+    // Surface the paused state immediately instead of waiting for the next
+    // segment to complete (which may never come while paused).
+    this.opts.onProgress?.(this.done, 0, this.bytesLoaded);
   }
 
   /** Resume launching segments. */
