@@ -10,7 +10,7 @@ import { storage } from '@/lib/platform/browser';
 import { registerMessageHandler, onProgressPort, type Request, type Response } from '@/lib/platform/messaging';
 import { isM3u8Url, isHlsContentType, normalizeUrl, deriveBaseFilename, extractM3u8Url } from '@/lib/detection/urlNormalizer';
 import { probeVariants } from '@/lib/detection/masterQualityProbe';
-import { getDetections, addDetection, clearTab } from '@/lib/state/sessionStore';
+import { getDetections, addDetection, clearTab, markDetectionDead } from '@/lib/state/sessionStore';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS } from '@/lib/state/settingsStore';
 import { addHistory, updateHistory, listHistory, removeHistory } from '@/lib/state/historyStore';
 import { setBadge, clearBadge, type BadgeState } from '@/lib/detection/badge';
@@ -127,9 +127,16 @@ async function recordDetection(tabId: number, url: string, source: 'network' | '
   if (added) {
     log.debug('detected', real, real !== url ? `(from ${url})` : '');
     refreshBadge(tabId, list.length);
-    // Probe quality in the background; update the stored item.
+    // Pre-flight probe: verify the playlist is reachable + parseable before it
+    // shows in the popup. Unreachable (404/expired/not-a-playlist) URLs are
+    // marked dead and filtered from the list instead of failing at download time.
     probeVariants(real).then((variants) => {
-      if (!variants.length) return;
+      if (!variants.length) {
+        // Probe fetch failed — likely a dead/expired link.
+        void markDetectionDead(tabId, real);
+        refreshBadge(tabId);
+        return;
+      }
       void addDetection(tabId, {
         url: real,
         source,

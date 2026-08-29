@@ -20,6 +20,8 @@ export interface DetectedItem {
   contentType?: string;
   /** Page the detection happened on. */
   pageUrl?: string;
+  /** Probe failed (404 / network / not a playlist) — hidden from the UI list. */
+  dead?: boolean;
 }
 
 /** One rendition from an HLS master playlist. */

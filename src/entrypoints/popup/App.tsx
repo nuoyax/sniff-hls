@@ -80,7 +80,10 @@ export default function App() {
 
   const refresh = useCallback(async (tid: number) => {
     const res = await sendMessage({ type: 'GET_DETECTIONS', tabId: tid });
-    if (res.ok && Array.isArray(res.data)) setDetections(res.data as DetectedItem[]);
+    if (res.ok && Array.isArray(res.data)) {
+      // Hide entries whose pre-flight probe failed (dead / expired links).
+      setDetections((res.data as DetectedItem[]).filter((d) => !d.dead));
+    }
   }, []);
 
   // Keep popup download badges in sync with the SW (ports alone miss jobs

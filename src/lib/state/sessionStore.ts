@@ -45,3 +45,13 @@ export async function clearAll(): Promise<void> {
   const keys = Object.keys(all).filter((k) => k.startsWith(KEY_PREFIX));
   if (keys.length) await storage.session.remove(keys);
 }
+
+/** Mark a detection as unreachable (probe failed) so the UI can filter it. */
+export async function markDetectionDead(tabId: number, url: string): Promise<void> {
+  const list = await getDetections(tabId);
+  const norm = normalizeUrl(url);
+  const hit = list.find((d) => normalizeUrl(d.url) === norm);
+  if (!hit || hit.dead) return;
+  hit.dead = true;
+  await storage.session.set({ [key(tabId)]: list });
+}
