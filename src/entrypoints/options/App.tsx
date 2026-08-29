@@ -275,9 +275,6 @@ function ProxyForm({
         <Button variant="primary" size="sm" onClick={() => onApply(cfg)}>
           {t('proxy.apply')}
         </Button>
-        <Button variant="secondary" size="sm" onClick={onClear}>
-          {t('proxy.clear')}
-        </Button>
         {message && <span className="text-[11px] text-fg-muted">{message}</span>}
       </div>
     </div>
