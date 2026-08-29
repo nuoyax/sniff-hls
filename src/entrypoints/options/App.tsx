@@ -62,6 +62,20 @@ export default function App() {
   return (
     <PageShell page="settings" title={t('settings.title')} subtitle={t('settings.subtitle')}>
 
+      <Section title={t('section.general')}>
+        <Row label={t('settings.language')}>
+          <select
+            className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
+            value={draft.locale}
+            onChange={(e) => update({ locale: e.target.value as Settings['locale'] })}
+          >
+            <option value="auto">{t('settings.language.auto')}</option>
+            <option value="en">English</option>
+            <option value="zh-CN">中文</option>
+          </select>
+        </Row>
+      </Section>
+
       <Section title={t('section.detection')}>
         <ToggleRow
           label={t('detect.auto.label')}
