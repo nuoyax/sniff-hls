@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS, type Settings } from '@/lib/state/settingsStore';
@@ -19,7 +19,7 @@ export default function App() {
     getSettings()
       .then((v) => {
         setS(v);
-        unsub = subscribeSettings((next) => setS({ ...next }));
+        unsub = subscribeSettings((next) => { setS({ ...next }); if (!dirtyRef.current) setDraft({ ...next }); });
       })
       .catch((e) => {
         setLoadError((e as Error).message || String(e));
@@ -37,7 +37,25 @@ export default function App() {
     );
   }
 
-  const update = (patch: Partial<Settings>) => setSettings(patch);
+  // Draft state: edits stay local until the user clicks Save.
+  const [draft, setDraft] = useState<Settings>(s);
+  const [dirty, setDirty] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const update = (patch: Partial<Settings>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    setDirty(true);
+    setSavedMsg('');
+  };
+
+  const save = async () => {
+    const { schemaVersion: _sv, ...patch } = draft;
+    await setSettings(patch);
+    setDirty(false);
+    setSavedMsg(t('settings.saved'));
+  };
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
@@ -47,13 +65,13 @@ export default function App() {
         <ToggleRow
           label={t('detect.auto.label')}
           hint={t('detect.auto.hint')}
-          checked={s.autoDetect}
+          checked={draft.autoDetect}
           onChange={(v) => update({ autoDetect: v })}
         />
         <ToggleRow
           label={t('detect.dom.label')}
           hint={t('detect.dom.hint')}
-          checked={s.domScan}
+          checked={draft.domScan}
           onChange={(v) => update({ domScan: v })}
         />
       </Section>
@@ -62,7 +80,7 @@ export default function App() {
         <Row label={t('downloads.format')}>
           <select
             className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
-            value={s.format}
+            value={draft.format}
             onChange={(e) => update({ format: e.target.value as OutputFormat })}
           >
             <option value="auto">{t('downloads.format.auto')}</option>
@@ -70,12 +88,12 @@ export default function App() {
             <option value="ts">{t('downloads.format.ts')}</option>
           </select>
         </Row>
-        <Row label={`${t('downloads.concurrency')}: ${s.concurrency}`}>
+        <Row label={`${t('downloads.concurrency')}: ${draft.concurrency}`}>
           <input
             type="range"
             min={1}
             max={20}
-            value={s.concurrency}
+            value={draft.concurrency}
             onChange={(e) => update({ concurrency: Number(e.target.value) })}
             className="w-48 accent-[rgb(var(--accent))]"
           />
@@ -83,7 +101,7 @@ export default function App() {
         <Row label={t('downloads.quality')}>
           <select
             className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
-            value={s.defaultQuality}
+            value={draft.defaultQuality}
             onChange={(e) => update({ defaultQuality: e.target.value as any })}
           >
             <option value="highest">{t('downloads.quality.highest')}</option>
@@ -93,20 +111,20 @@ export default function App() {
         <Row label={t('downloads.subfolder')}>
           <input
             className="w-48 rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"
-            value={s.subfolder}
+            value={draft.subfolder}
             onChange={(e) => update({ subfolder: e.target.value })}
           />
         </Row>
         <ToggleRow
           label={t('downloads.notify')}
-          checked={s.notifyOnComplete}
+          checked={draft.notifyOnComplete}
           onChange={(v) => update({ notifyOnComplete: v })}
         />
       </Section>
 
       <Section title={t('section.proxy')}>
         <ProxyForm
-          config={s.proxy as ProxyConfig}
+          config={draft.proxy as ProxyConfig}
           onApply={async (cfg) => {
             const r = await sendMessage({ type: 'APPLY_PROXY', config: cfg });
             setProxyMsg(r.ok ? t('proxy.applied') : `${t('proxy.failed')}: ${r.error}`);
@@ -125,10 +143,10 @@ export default function App() {
         <ToggleRow
           label={t('privacy.telemetry')}
           hint={t('privacy.telemetry.hint')}
-          checked={s.telemetry}
+          checked={draft.telemetry}
           onChange={(v) => update({ telemetry: v })}
         />
-        <ToggleRow label={t('privacy.debug')} checked={s.debug} onChange={(v) => update({ debug: v })} />
+        <ToggleRow label={t('privacy.debug')} checked={draft.debug} onChange={(v) => update({ debug: v })} />
       </Section>
 
       <p className="mt-8 text-[11px] text-fg-muted">
@@ -139,16 +157,20 @@ export default function App() {
         <Button
           variant="secondary"
           size="sm"
-          onClick={async () => {
-            // setSettings merges, so pass every default key explicitly.
+          onClick={() => {
             const { schemaVersion: _sv, ...defaults } = DEFAULT_SETTINGS;
-            await setSettings(defaults);
-            setProxyMsg(t('settings.reset.done'));
+            setDraft({ ...defaults, schemaVersion: draft.schemaVersion });
+            setDirty(true);
+            setSavedMsg('');
           }}
         >
           {t('settings.reset')}
         </Button>
-        <span className="text-[11px] text-fg-muted">{t('settings.persist.hint')}</span>
+        <Button variant="primary" size="sm" onClick={save} disabled={!dirty}>
+          {t('settings.save')}
+        </Button>
+        {savedMsg && <span className="text-[11px] text-ok">{savedMsg}</span>}
+        {dirty && !savedMsg && <span className="text-[11px] text-warn">{t('settings.unsaved')}</span>}
       </div>
     </div>
   );
