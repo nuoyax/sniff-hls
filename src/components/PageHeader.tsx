@@ -59,16 +59,18 @@ function LanguageSwitch() {
     await setSettings({ locale: v as 'auto' | 'en' | 'zh-CN' });
   };
 
-  // Effective value for display: explicit setting wins; otherwise show which
-  // locale 'auto' resolves to.
+  // Effective locale in use: explicit setting wins; otherwise the resolved 'auto'.
   const effective = setting === 'auto' ? locale : setting;
-  const label = setting === 'auto' ? `AUTO · ${effective === 'zh-CN' ? '中' : 'EN'}` : effective === 'zh-CN' ? '中文' : 'EN';
+  // Label shows the switch TARGET (what you get by clicking), so an English
+  // UI displays "中文" as the affordance to switch to Chinese.
+  const target: 'en' | 'zh-CN' = effective === 'zh-CN' ? 'en' : 'zh-CN';
+  const label = setting === 'auto' ? `AUTO → ${target === 'zh-CN' ? '中文' : 'EN'}` : target === 'zh-CN' ? '中文' : 'EN';
 
   return (
     <Button
       variant="ghost"
       size="sm"
-      onClick={() => change(effective === 'zh-CN' ? 'en' : 'zh-CN')}
+      onClick={() => change(target)}
       onContextMenu={(e) => {
         // Right-click cycles to 'auto' (follow browser) as a hidden third state.
         e.preventDefault();
