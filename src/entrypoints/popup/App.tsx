@@ -246,7 +246,7 @@ export default function App() {
                 onPauseResume={(pause) =>
                   active[d.url] &&
                   sendMessage({
-                    type: pause ? 'PAUSE_DOWNLOAD' : 'RESUME_DOWNLOAD',
+                    type: 'RESUME_DOWNLOAD',
                     jobId: active[d.url].jobId,
                   })
                 }
@@ -326,15 +326,10 @@ function StreamItem({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isDownloading ? (
-            <>
-              <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
-                <ProgressRing value={active!.ratio} />
-                {Math.round((active!.ratio || 0) * 100)}%
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => onPauseResume(false)} title={t('manager.pause')}>
-                ⏸
-              </Button>
-            </>
+            <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
+              <ProgressRing value={active!.ratio} />
+              {Math.round((active!.ratio || 0) * 100)}%
+            </span>
           ) : active?.status === 'paused' ? (
             <>
               <Badge tone="warn">{t('manager.pause')}</Badge>

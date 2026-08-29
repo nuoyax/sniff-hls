@@ -4,7 +4,7 @@ import { Badge } from '@/components/Badge';
 import { ProgressBar } from '@/components/Progress';
 import { EmptyState } from '@/components/EmptyState';
 import { PageShell } from '@/components/PageShell';
-import { sendMessage } from '@/lib/platform/messaging';
+import { sendMessage, openProgressPort, type ProgressEvent } from '@/lib/platform/messaging';
 import { bapi } from '@/lib/platform/browser';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
 import { useI18n, translate, resolveLocale } from '@/lib/i18n';
@@ -87,13 +87,12 @@ export default function App() {
     return unsub;
   }, []);
 
-  // Poll active jobs (the SW holds the live map).
+  // Poll active jobs as a baseline (the SW holds the live map), plus
+  // per-job progress ports for instant status changes (pause/resume click
+  // must show up immediately, not up to 1s later).
   useEffect(() => {
     let alive = true;
-    const tick = async () => {
-      const res = await sendMessage({ type: 'GET_ACTIVE' });
-      if (!alive || !res.ok || !res.data) return;
-      const map = res.data as Record<string, any>;
+    const applyMap = (map: Record<string, any>) => {
       const list = Object.entries(map).map(([jobId, j]) => ({
         jobId,
         url: j.url,
@@ -102,12 +101,49 @@ export default function App() {
         filename: j.baseFilename,
       }));
       setActive(list);
+      // Keep one progress port open per active job.
+      for (const jobId of Object.keys(map)) {
+        if (!ports.has(jobId)) {
+          const port = openProgressPort(jobId);
+          ports.set(jobId, port);
+          port.onProgress((e: ProgressEvent) => {
+            if ('kind' in e) return;
+            const p = e as DownloadProgress;
+            if (!alive) return;
+            setActive((prev) =>
+              prev.map((a) =>
+                a.jobId === p.jobId
+                  ? { ...a, status: p.status, ratio: p.total > 0 ? p.done / p.total : a.ratio }
+                  : a,
+              ),
+            );
+          });
+        }
+      }
+      for (const [jobId, port] of ports) {
+        if (!map[jobId]) {
+          port.close();
+          ports.delete(jobId);
+        }
+      }
+    };
+    const ports = new Map<string, ReturnType<typeof openProgressPort>>();
+    const tick = async () => {
+      try {
+        const res = await sendMessage({ type: 'GET_ACTIVE' });
+        if (!alive || !res.ok || !res.data) return;
+        applyMap(res.data as Record<string, any>);
+      } catch {
+        /* SW may be restarting */
+      }
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => {
       alive = false;
       clearInterval(id);
+      for (const p of ports.values()) p.close();
+      ports.clear();
     };
   }, []);
 
