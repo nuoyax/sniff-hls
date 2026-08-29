@@ -121,6 +121,8 @@ Build output lands in `.output/`:
 - `.output/firefox-mv3/` — Firefox
 - `.output/safari-mv3/` — Safari
 
+> 💡 Prefer a visual guide? Open **[`docs/install.html`](docs/install.html)** — a single-page tabbed installer (Chrome / Edge / Firefox / Safari) with copy-to-clipboard commands and per-browser load steps.
+
 ---
 
 ### Chrome
@@ -193,9 +195,11 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 - **Output format**: Auto (MP4 → TS fallback) / Always MP4 / Always TS
 - **Concurrency**: 1–20 parallel segment fetches
 - **Default quality**: highest / lowest bandwidth
-- **Download subfolder**
-- **Proxy**: HTTP / HTTPS / SOCKS5
-- **Notifications**, **telemetry**, **debug logging**
+- **Download directory**: absolute path (e.g. `D:\Videos`) with folder picker
+- **Proxy**: HTTP / HTTPS / SOCKS5 (applied via Save, persisted across restarts)
+- **Save / Reset to defaults** bar — edits stay in a draft until saved
+- **Language**: header switch (English / 简体中文, default English)
+- **Notifications**, **usage statistics**, **debug logging**
 
 ---
 
@@ -281,6 +285,18 @@ Engine internals are unit-tested with Vitest:
 ```bash
 npm test
 ```
+
+---
+
+## 📜 Changelog
+
+### 0.2.0 (unreleased)
+- **New UI language system** — English / 简体中文 with a header language switch (right-click to follow browser); UI defaults to English.
+- **Settings rework** — explicit Save / Reset-to-defaults bar; all options persist across browser restarts; applied proxy config now survives service-worker restarts.
+- **Download directory** — replaces the old subfolder setting; accepts absolute paths (e.g. `D:\Videos`) with a folder picker.
+- **Download manager** — shared page header, paginated history (20 per page), settings shortcut.
+- **Popup** — settings now open in a new tab; breathing-halo empty state.
+- **i18n infra** — zod-validated `locale` setting (`auto` / `en` / `zh-CN`) with unit tests.
 
 ---
 
