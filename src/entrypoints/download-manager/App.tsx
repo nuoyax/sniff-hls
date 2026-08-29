@@ -5,6 +5,7 @@ import { ProgressBar } from '@/components/Progress';
 import { EmptyState } from '@/components/EmptyState';
 import { PageShell } from '@/components/PageShell';
 import { sendMessage } from '@/lib/platform/messaging';
+import { bapi } from '@/lib/platform/browser';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
 import { useI18n } from '@/lib/i18n';
 import type { DownloadProgress, HistoryEntry } from '@/lib/types';
@@ -35,8 +36,8 @@ async function deleteHistoryHard(h: HistoryEntry) {
   // If the entry maps to a finished browser download, erase the file too.
   if (h.downloadId) {
     try {
-      const items = await (globalThis as any).browser?.downloads?.search?.({ id: h.downloadId });
-      if (items?.[0]) await (globalThis as any).browser.downloads.removeFile(h.downloadId);
+      const items = await bapi.downloads.search({ id: h.downloadId });
+      if (items?.[0]) await bapi.downloads.removeFile(h.downloadId);
     } catch {
       /* file already gone */
     }
@@ -48,18 +49,17 @@ async function deleteHistoryHard(h: HistoryEntry) {
 async function openHistoryFile(h: HistoryEntry) {
   if (!h.downloadId) return;
   try {
-    const b = (globalThis as any).browser;
-    const items = await b?.downloads?.search?.({ id: h.downloadId });
+    const items = await bapi.downloads.search({ id: h.downloadId });
     const item = items?.[0];
     if (item?.exists && item.state === 'complete') {
-      await b.downloads.open(h.downloadId);
+      await bapi.downloads.open(h.downloadId);
     } else {
-      await b.downloads.show(h.downloadId);
+      await bapi.downloads.show(h.downloadId);
     }
   } catch {
     // open() may be blocked; reveal the containing folder instead.
     try {
-      await (globalThis as any).browser?.downloads?.show?.(h.downloadId);
+      await bapi.downloads.show(h.downloadId);
     } catch {
       /* nothing else we can do */
     }
