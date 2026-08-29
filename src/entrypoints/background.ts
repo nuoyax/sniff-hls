@@ -411,6 +411,11 @@ function handleHostMessage(msg: any) {
 function onHostProgress(p: DownloadProgress) {
   const j = activeJobs.get(p.jobId);
   if (!j) return;
+  // The SW is the source of truth for paused state. A segment completing in
+  // flight right around a pause/resume click can carry a stale 'fetching' /
+  // 'paused' status that would revert the user's action — normalize it.
+  if (j.status === 'paused' && p.status === 'fetching') p.status = 'paused';
+  else if (j.status === 'fetching' && p.status === 'paused') p.status = 'fetching';
   j.status = p.status;
   j.done = p.done;
   j.total = p.total;

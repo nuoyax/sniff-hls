@@ -51,16 +51,16 @@ export class SegmentPool {
     this.decryptor = opts.decryptor ?? null;
   }
 
-  /** Pause launching new segments (in-flight requests finish). */
+  /** Pause launching new segments. In-flight requests are left to finish and
+   * their bytes kept; nothing new starts while paused. The SW broadcasts
+   * 'paused' instantly, so no progress event is needed here. */
   pause(): void {
     this.paused = true;
-    // Surface the paused state immediately instead of waiting for the next
-    // segment to complete (which may never come while paused).
-    this.opts.onProgress?.(this.done, 0, this.bytesLoaded);
   }
 
   /** Resume launching segments. */
   resume(): void {
+    if (!this.paused) return;
     this.paused = false;
     for (const w of this.resumeWaiters.splice(0)) w();
   }
