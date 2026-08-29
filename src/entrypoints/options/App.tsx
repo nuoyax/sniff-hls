@@ -148,7 +148,7 @@ export default function App() {
       </Section>
 
       <p className="mt-8 text-[11px] text-fg-muted">
-        Sniffls · v0.1.0 · MIT
+        Sniffls · v0.2.0 · MIT
       </p>
 
       <div className="mt-4 flex items-center gap-3">

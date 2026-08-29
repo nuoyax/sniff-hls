@@ -290,7 +290,7 @@ npm test
 
 ## 📜 Changelog
 
-### 0.2.0 (unreleased)
+### 0.2.0 (2026-08-29)
 - **New UI language system** — English / 简体中文 with a header language switch (right-click to follow browser); UI defaults to English.
 - **Settings rework** — explicit Save / Reset-to-defaults bar; all options persist across browser restarts; applied proxy config now survives service-worker restarts.
 - **Download directory** — replaces the old subfolder setting; accepts absolute paths (e.g. `D:\Videos`) with a folder picker.

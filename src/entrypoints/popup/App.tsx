@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { sendMessage, openProgressPort, type ProgressEvent } from '@/lib/platform/messaging';
+import { openOrFocusPage } from '@/lib/platform/pageOpener';
 import type { DetectedItem, DownloadProgress, OutputFormat, VariantInfo } from '@/lib/types';
 import { Button } from '@/components/Button';
 import { Badge, qualityLabel } from '@/components/Badge';
@@ -128,9 +129,7 @@ export default function App() {
   }, [tabId, refresh]);
 
   const openOptions = useCallback(async () => {
-    const b = (typeof browser !== 'undefined' ? browser : chrome) as any;
-    const url = b.runtime.getURL('options.html');
-    await b.tabs.create({ url });
+    await openOrFocusPage('options.html');
   }, []);
 
   const openManager = useCallback(async () => {

@@ -16,6 +16,7 @@ import { addHistory, updateHistory, listHistory } from '@/lib/state/historyStore
 import { setBadge, clearBadge, type BadgeState } from '@/lib/detection/badge';
 import { ensureHost, markHostReady, sendToHost, setupHostPort } from '@/lib/engine/hostManager';
 import { applyProxy, clearProxy } from '@/lib/platform/proxyShim';
+import { openOrFocusPage } from '@/lib/platform/pageOpener';
 import { sanitizeFilename } from '@/lib/platform/downloadsShim';
 import { DownloadEngine } from '@/lib/engine/engine';
 import { ExtensionError } from '@/lib/errors';
@@ -211,7 +212,7 @@ async function handleMessage(req: Request): Promise<Response> {
       return { ok: true, data: Object.fromEntries(activeJobs) };
     }
     case 'OPEN_MANAGER': {
-      await bapi.tabs.create({ url: bapi.runtime.getURL('download-manager.html') });
+      await openOrFocusPage('download-manager.html');
       return { ok: true };
     }
     case 'APPLY_PROXY': {
