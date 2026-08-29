@@ -185,9 +185,13 @@ Safari 应用扩展需要 Xcode。WXT 的 Safari 构建产出可被 Xcode 项目
 
 ![弹窗预览 — 检测到的流、清晰度选择、实时下载进度](docs/images/popup-preview.svg)
 
+### 下载管理
+
+![管理页预览 — 历史记录、状态、实时进度、翻页](docs/images/manager-preview.svg)
+
 ### 设置
 
-![设置预览 — 检测、下载、代理](docs/images/options-preview.svg)
+![设置页预览 — 检测、下载、代理](docs/images/options-preview.svg)
 
 ### 设置（选项页）
 - **自动检测** 开/关（网络嗅探）

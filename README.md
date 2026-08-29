@@ -185,6 +185,10 @@ Safari App Extensions require Xcode. The WXT Safari build produces sources you w
 
 ![Popup preview — detected streams, quality picker, live download progress](docs/images/popup-preview.svg)
 
+### Download Manager
+
+![Manager preview — history list with status, live progress, pagination](docs/images/manager-preview.svg)
+
 ### Settings
 
 ![Options preview — detection, downloads, proxy](docs/images/options-preview.svg)
