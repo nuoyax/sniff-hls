@@ -31,13 +31,17 @@ export async function fetchText(url: string, opts: FetchTextOptions = {}): Promi
 /** Fetch a URL as ArrayBuffer. */
 export async function fetchBytes(
   url: string,
-  opts: { byterange?: { offset: number; length: number }; timeoutMs?: number; retries?: number } = {},
+  opts: { byterange?: { offset: number; length: number }; timeoutMs?: number; retries?: number; signal?: AbortSignal } = {},
 ): Promise<Uint8Array> {
-  const { byterange, timeoutMs = 60_000, retries = 3 } = opts;
+  const { byterange, timeoutMs = 60_000, retries = 3, signal } = opts;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // Forward external abort (pause/cancel) to the in-flight request.
+    const onExternalAbort = () => controller.abort();
+    signal?.addEventListener('abort', onExternalAbort, { once: true });
     try {
       const init: RequestInit = { signal: controller.signal, credentials: 'omit' };
       if (byterange) {
@@ -52,11 +56,16 @@ export async function fetchBytes(
       return new Uint8Array(buf);
     } catch (e) {
       lastErr = e;
-      // exponential backoff with jitter
-      const wait = Math.min(8000, 300 * 2 ** attempt) * (0.5 + Math.random());
-      await sleep(wait);
+      // External abort (pause/cancel) — do not retry, propagate immediately.
+      if (signal?.aborted) throw e;
+      // exponential backoff with jitter (instant in vitest)
+      if ((globalThis as any).__VITEST__ !== true) {
+        const wait = Math.min(8000, 300 * 2 ** attempt) * (0.5 + Math.random());
+        await sleep(wait);
+      }
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onExternalAbort);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error('fetch failed');

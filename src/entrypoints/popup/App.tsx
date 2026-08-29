@@ -80,7 +80,10 @@ export default function App() {
 
   const refresh = useCallback(async (tid: number) => {
     const res = await sendMessage({ type: 'GET_DETECTIONS', tabId: tid });
-    if (res.ok && Array.isArray(res.data)) setDetections(res.data as DetectedItem[]);
+    if (res.ok && Array.isArray(res.data)) {
+      // Hide entries whose pre-flight probe failed (dead / expired links).
+      setDetections((res.data as DetectedItem[]).filter((d) => !d.dead));
+    }
   }, []);
 
   // Keep popup download badges in sync with the SW (ports alone miss jobs
@@ -183,11 +186,6 @@ export default function App() {
     [tabId, pageUrl, pageTitle],
   );
 
-  const cancel = useCallback(async (jobId: string, url: string) => {
-    await sendMessage({ type: 'CANCEL_DOWNLOAD', jobId });
-    setActive((a) => ({ ...a, [url]: { ...a[url], status: 'canceled' } }));
-  }, []);
-
   if (loading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-fg-muted">Loading…</div>
@@ -245,7 +243,13 @@ export default function App() {
                 pageTitle={pageTitle}
                 active={active[d.url]}
                 onDownload={(v, fname) => startDownload(d.url, v, fname)}
-                onCancel={() => active[d.url] && cancel(active[d.url].jobId, d.url)}
+                onPauseResume={(pause) =>
+                  active[d.url] &&
+                  sendMessage({
+                    type: 'RESUME_DOWNLOAD',
+                    jobId: active[d.url].jobId,
+                  })
+                }
               />
             ))}
           </ul>
@@ -274,13 +278,13 @@ function StreamItem({
   pageTitle,
   active,
   onDownload,
-  onCancel,
+  onPauseResume,
 }: {
   item: DetectedItem;
   pageTitle?: string;
   active?: ActiveDownload;
   onDownload: (variant?: VariantInfo, filename?: string) => void;
-  onCancel: () => void;
+  onPauseResume: (pause: boolean) => void;
 }) {
   const variants = item.variants ?? [];
   const best = variants.length ? variants[variants.length - 1] : undefined;
@@ -322,13 +326,15 @@ function StreamItem({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isDownloading ? (
+            <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
+              <ProgressRing value={active!.ratio} />
+              {Math.round((active!.ratio || 0) * 100)}%
+            </span>
+          ) : active?.status === 'paused' ? (
             <>
-              <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
-                <ProgressRing value={active!.ratio} />
-                {Math.round((active!.ratio || 0) * 100)}%
-              </span>
-              <Button variant="ghost" size="sm" onClick={onCancel} title={t('popup.cancel')}>
-                ✕
+              <Badge tone="warn">{t('manager.pause')}</Badge>
+              <Button variant="ghost" size="sm" onClick={() => onPauseResume(true)} title={t('manager.resume')}>
+                ▶
               </Button>
             </>
           ) : isDone ? (
@@ -338,8 +344,8 @@ function StreamItem({
               <span title={active?.error}>{t('popup.failed')}</span>
             </Badge>
           ) : (
-            <Button variant="primary" size="sm" onClick={() => trigger(best)}>
-              <DownloadIcon className="h-3.5 w-3.5" /> {t('popup.download')}
+            <Button variant="primary" size="sm" className="h-9 w-9 px-0" onClick={() => trigger(best)} title={t('popup.download')}>
+              <DownloadIcon className="h-5 w-5" />
             </Button>
           )}
         </div>

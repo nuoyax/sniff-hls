@@ -20,6 +20,8 @@ export interface DetectedItem {
   contentType?: string;
   /** Page the detection happened on. */
   pageUrl?: string;
+  /** Probe failed (404 / network / not a playlist) — hidden from the UI list. */
+  dead?: boolean;
 }
 
 /** One rendition from an HLS master playlist. */
@@ -108,6 +110,7 @@ export type OutputFormat = 'mp4' | 'ts' | 'auto';
 export type DownloadStatus =
   | 'queued'
   | 'fetching'
+  | 'paused'
   | 'decrypting'
   | 'transmuxing'
   | 'assembling'
@@ -169,4 +172,6 @@ export interface HistoryEntry {
   status: DownloadStatus;
   error?: string;
   variant?: string;
+  /** Browser download id (chrome.downloads) for open/show actions. */
+  downloadId?: number;
 }

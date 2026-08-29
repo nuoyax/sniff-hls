@@ -10,9 +10,9 @@ import { storage } from '@/lib/platform/browser';
 import { registerMessageHandler, onProgressPort, type Request, type Response } from '@/lib/platform/messaging';
 import { isM3u8Url, isHlsContentType, normalizeUrl, deriveBaseFilename, extractM3u8Url } from '@/lib/detection/urlNormalizer';
 import { probeVariants } from '@/lib/detection/masterQualityProbe';
-import { getDetections, addDetection, clearTab } from '@/lib/state/sessionStore';
+import { getDetections, addDetection, clearTab, markDetectionDead } from '@/lib/state/sessionStore';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS } from '@/lib/state/settingsStore';
-import { addHistory, updateHistory, listHistory } from '@/lib/state/historyStore';
+import { addHistory, updateHistory, listHistory, removeHistory } from '@/lib/state/historyStore';
 import { setBadge, clearBadge, type BadgeState } from '@/lib/detection/badge';
 import { ensureHost, markHostReady, sendToHost, setupHostPort } from '@/lib/engine/hostManager';
 import { applyProxy, clearProxy } from '@/lib/platform/proxyShim';
@@ -127,9 +127,16 @@ async function recordDetection(tabId: number, url: string, source: 'network' | '
   if (added) {
     log.debug('detected', real, real !== url ? `(from ${url})` : '');
     refreshBadge(tabId, list.length);
-    // Probe quality in the background; update the stored item.
+    // Pre-flight probe: verify the playlist is reachable + parseable before it
+    // shows in the popup. Unreachable (404/expired/not-a-playlist) URLs are
+    // marked dead and filtered from the list instead of failing at download time.
     probeVariants(real).then((variants) => {
-      if (!variants.length) return;
+      if (!variants.length) {
+        // Probe fetch failed — likely a dead/expired link.
+        void markDetectionDead(tabId, real);
+        refreshBadge(tabId);
+        return;
+      }
       void addDetection(tabId, {
         url: real,
         source,
@@ -206,6 +213,44 @@ async function handleMessage(req: Request): Promise<Response> {
     }
     case 'CANCEL_DOWNLOAD': {
       cancelJob(req.jobId);
+      return { ok: true };
+    }
+    case 'PAUSE_DOWNLOAD': {
+      await sendToHost({ __host: true, kind: 'PAUSE', jobId: req.jobId }).catch(() => {});
+      const j = activeJobs.get(req.jobId);
+      if (j) {
+        j.status = 'paused';
+        broadcastProgress({ jobId: req.jobId, status: 'paused', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0 });
+        void updateHistory(j.historyId, { status: 'paused' });
+      }
+      return { ok: true };
+    }
+    case 'RESUME_DOWNLOAD': {
+      await sendToHost({ __host: true, kind: 'RESUME', jobId: req.jobId }).catch(() => {});
+      const j = activeJobs.get(req.jobId);
+      if (j) {
+        j.status = 'fetching';
+        broadcastProgress({ jobId: req.jobId, status: 'fetching', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0 });
+        void updateHistory(j.historyId, { status: 'fetching' });
+      }
+      return { ok: true };
+    }
+    case 'DELETE_DOWNLOAD': {
+      // Hard delete: remove the file from disk (via downloads API) + cancel if
+      // still running + drop the history entry.
+      const j = activeJobs.get(req.jobId);
+      if (j) {
+        cancelJob(req.jobId);
+      }
+      await deleteDownloadByJob(req.jobId);
+      return { ok: true };
+    }
+    case 'OPEN_HISTORY_FILE': {
+      await openHistoryFile(req.historyId);
+      return { ok: true };
+    }
+    case 'SHOW_HISTORY_FILE': {
+      await showHistoryFile(req.historyId);
       return { ok: true };
     }
     case 'GET_ACTIVE': {
@@ -318,6 +363,8 @@ function cancelJob(jobId: string) {
   const j = activeJobs.get(jobId);
   if (!j) return;
   j.engine?.cancel();
+  // Engine runs in the host context — tell it to cancel too (fire-and-forget).
+  void sendToHost({ __host: true, kind: 'CANCEL', jobId }).catch(() => {});
   j.status = 'canceled';
   void updateHistory(j.historyId, { status: 'canceled' });
   broadcastProgress({
@@ -364,6 +411,11 @@ function handleHostMessage(msg: any) {
 function onHostProgress(p: DownloadProgress) {
   const j = activeJobs.get(p.jobId);
   if (!j) return;
+  // The SW is the source of truth for paused state. A segment completing in
+  // flight right around a pause/resume click can carry a stale 'fetching' /
+  // 'paused' status that would revert the user's action — normalize it.
+  if (j.status === 'paused' && p.status === 'fetching') p.status = 'paused';
+  else if (j.status === 'fetching' && p.status === 'paused') p.status = 'fetching';
   j.status = p.status;
   j.done = p.done;
   j.total = p.total;
@@ -373,7 +425,7 @@ function onHostProgress(p: DownloadProgress) {
   void updateHistory(j.historyId, { status: p.status });
 }
 
-async function onHostComplete(jobId: string, result: { sizeBytes: number; filename: string; format: import('@/lib/types').OutputFormat }) {
+async function onHostComplete(jobId: string, result: { sizeBytes: number; filename: string; format: import('@/lib/types').OutputFormat; downloadId?: number }) {
   const j = activeJobs.get(jobId);
   if (!j) return;
   j.status = 'complete';
@@ -383,6 +435,7 @@ async function onHostComplete(jobId: string, result: { sizeBytes: number; filena
     sizeBytes: result.sizeBytes,
     filename: result.filename,
     format: result.format,
+    downloadId: result.downloadId,
   });
   const s = await getSettings();
   if (s.notifyOnComplete && capabilities.notifications) {
@@ -391,7 +444,7 @@ async function onHostComplete(jobId: string, result: { sizeBytes: number; filena
         type: 'basic',
         iconUrl: bapi.runtime.getURL('icon/48.png'),
         title: 'Download complete',
-        message: result.filename,
+        message: `${result.filename} · ${formatBytes(result.sizeBytes)}`,
       });
     } catch {
       /* noop */
@@ -407,7 +460,95 @@ async function onHostError(jobId: string, error: { code: string; message: string
   j.status = 'error';
   await updateHistory(j.historyId, { status: 'error', error: error.message });
   broadcastProgress({ jobId, status: 'error', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0, error: error.message });
+  const s = await getSettings();
+  if (s.notifyOnComplete && capabilities.notifications) {
+    try {
+      bapi.notifications.create(`err_${jobId}`, {
+        type: 'basic',
+        iconUrl: bapi.runtime.getURL('icon/48.png'),
+        title: `Download failed (${error.code})`,
+        message: `${j.baseFilename} · ${error.message}`,
+      });
+    } catch {
+      /* noop */
+    }
+  }
   activeJobs.delete(jobId);
+}
+
+// Notification click → open the download manager page.
+bapi.notifications?.onClicked?.addListener((notifId: string) => {
+  if (notifId.startsWith('done_') || notifId.startsWith('err_')) {
+    void openOrFocusPage('download-manager.html');
+  }
+});
+
+function formatBytes(n: number): string {
+  if (!n) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(n) / Math.log(1024));
+  return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
+}
+
+// ===================== history file actions =====================
+//
+// History rows keep the browser downloadId; double-click tries to open the
+// file directly, falling back to revealing it in the downloads folder.
+
+/** Find the finished download's file path (if it still exists on disk). */
+async function findDownloadFile(historyId: string): Promise<{ id: number; path?: string } | null> {
+  const hist = await listHistory();
+  const h = hist.find((x) => x.id === historyId);
+  if (!h?.downloadId) return null;
+  try {
+    const items = await bapi.downloads.search({ id: h.downloadId });
+    const item = items?.[0];
+    if (!item || !item.exists || item.state !== 'complete') return null;
+    return { id: h.downloadId, path: item.filename };
+  } catch {
+    return null;
+  }
+}
+
+async function openHistoryFile(historyId: string): Promise<void> {
+  const f = await findDownloadFile(historyId);
+  if (f) {
+    await bapi.downloads.open(f.id);
+    return;
+  }
+  // File gone (deleted/moved) or downloadId lost — reveal whatever the browser
+  // knows about it, else surface an error to the caller.
+  await showHistoryFile(historyId);
+}
+
+async function showHistoryFile(historyId: string): Promise<void> {
+  const hist = await listHistory();
+  const h = hist.find((x) => x.id === historyId);
+  if (h?.downloadId) {
+    try {
+      const items = await bapi.downloads.search({ id: h.downloadId });
+      if (items?.[0]) {
+        await bapi.downloads.show(h.downloadId);
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  throw new Error('File not found');
+}
+
+/** Hard delete: erase the file from disk and drop the history entry. */
+async function deleteDownloadByJob(jobId: string): Promise<void> {
+  // Active job → its history entry shares the jobId lineage via activeJobs.
+  const j = activeJobs.get(jobId);
+  const historyId = j?.historyId;
+  if (historyId) {
+    await removeHistory(historyId);
+    return;
+  }
+  // Completed download: the manager passes the history id itself.
+  await removeHistory(jobId);
 }
 
 // ===================== progress fan-out (SW → UI ports) =====================

@@ -113,6 +113,22 @@ export default function App() {
             className="w-48 accent-[rgb(var(--accent))]"
           />
         </Row>
+        <Row label={`${t('downloads.retries')}: ${draft.segmentRetries}`}>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            value={draft.segmentRetries}
+            onChange={(e) => update({ segmentRetries: Number(e.target.value) })}
+            className="w-48 accent-[rgb(var(--accent))]"
+          />
+        </Row>
+        <ToggleRow
+          label={t('downloads.resume')}
+          hint={t('downloads.resume.hint')}
+          checked={draft.resumeEnabled}
+          onChange={(v) => update({ resumeEnabled: v })}
+        />
         <Row label={t('downloads.quality')}>
           <select
             className="rounded-lg border border-border bg-bg-elevated px-2 py-1 text-sm"

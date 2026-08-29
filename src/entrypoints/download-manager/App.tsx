@@ -4,9 +4,10 @@ import { Badge } from '@/components/Badge';
 import { ProgressBar } from '@/components/Progress';
 import { EmptyState } from '@/components/EmptyState';
 import { PageShell } from '@/components/PageShell';
-import { sendMessage } from '@/lib/platform/messaging';
+import { sendMessage, openProgressPort, type ProgressEvent } from '@/lib/platform/messaging';
+import { bapi } from '@/lib/platform/browser';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, translate, resolveLocale } from '@/lib/i18n';
 import type { DownloadProgress, HistoryEntry } from '@/lib/types';
 
 interface ActiveView {
@@ -15,6 +16,62 @@ interface ActiveView {
   status: DownloadProgress['status'];
   ratio: number;
   filename?: string;
+}
+
+/** Cancel the engine job behind an active row. */
+async function cancelJob(jobId: string) {
+  await sendMessage({ type: 'CANCEL_DOWNLOAD', jobId });
+}
+
+async function pauseJob(jobId: string) {
+  await sendMessage({ type: 'PAUSE_DOWNLOAD', jobId });
+}
+
+async function resumeJob(jobId: string) {
+  await sendMessage({ type: 'RESUME_DOWNLOAD', jobId });
+}
+
+/** Hard delete a history row: erase the file from disk + drop the entry. */
+async function deleteHistoryHard(h: HistoryEntry) {
+  // If the entry maps to a finished browser download, erase the file too.
+  if (h.downloadId) {
+    try {
+      const items = await bapi.downloads.search({ id: h.downloadId });
+      if (items?.[0]) await bapi.downloads.removeFile(h.downloadId);
+    } catch {
+      /* file already gone */
+    }
+  }
+  await removeHistory(h.id);
+}
+
+/** Double-click / ▶: open the downloaded file; fall back to showing its folder. */
+async function openHistoryFile(h: HistoryEntry) {
+  if (!h.downloadId) {
+    // Records created before downloadId tracking can't be located — surface it
+    // instead of failing silently.
+    console.warn('[sniffls] no downloadId for', h.filename, '— re-download to enable open');
+    alert(translate(resolveLocale('auto'), 'manager.openFile.missing'));
+    return;
+  }
+  try {
+    const items = await bapi.downloads.search({ id: h.downloadId });
+    const item = items?.[0];
+    if (item?.exists && item.state === 'complete') {
+      await bapi.downloads.open(h.downloadId);
+    } else {
+      await bapi.downloads.show(h.downloadId);
+    }
+  } catch (e) {
+    // open() may be blocked; reveal the containing folder instead.
+    console.warn('[sniffls] open failed, trying show', e);
+    try {
+      await bapi.downloads.show(h.downloadId);
+    } catch (e2) {
+      console.warn('[sniffls] show failed too', e2);
+      alert(translate(resolveLocale('auto'), 'manager.openFile.missing'));
+    }
+  }
 }
 
 export default function App() {
@@ -30,13 +87,12 @@ export default function App() {
     return unsub;
   }, []);
 
-  // Poll active jobs (the SW holds the live map).
+  // Poll active jobs as a baseline (the SW holds the live map), plus
+  // per-job progress ports for instant status changes (pause/resume click
+  // must show up immediately, not up to 1s later).
   useEffect(() => {
     let alive = true;
-    const tick = async () => {
-      const res = await sendMessage({ type: 'GET_ACTIVE' });
-      if (!alive || !res.ok || !res.data) return;
-      const map = res.data as Record<string, any>;
+    const applyMap = (map: Record<string, any>) => {
       const list = Object.entries(map).map(([jobId, j]) => ({
         jobId,
         url: j.url,
@@ -45,12 +101,49 @@ export default function App() {
         filename: j.baseFilename,
       }));
       setActive(list);
+      // Keep one progress port open per active job.
+      for (const jobId of Object.keys(map)) {
+        if (!ports.has(jobId)) {
+          const port = openProgressPort(jobId);
+          ports.set(jobId, port);
+          port.onProgress((e: ProgressEvent) => {
+            if ('kind' in e) return;
+            const p = e as DownloadProgress;
+            if (!alive) return;
+            setActive((prev) =>
+              prev.map((a) =>
+                a.jobId === p.jobId
+                  ? { ...a, status: p.status, ratio: p.total > 0 ? p.done / p.total : a.ratio }
+                  : a,
+              ),
+            );
+          });
+        }
+      }
+      for (const [jobId, port] of ports) {
+        if (!map[jobId]) {
+          port.close();
+          ports.delete(jobId);
+        }
+      }
+    };
+    const ports = new Map<string, ReturnType<typeof openProgressPort>>();
+    const tick = async () => {
+      try {
+        const res = await sendMessage({ type: 'GET_ACTIVE' });
+        if (!alive || !res.ok || !res.data) return;
+        applyMap(res.data as Record<string, any>);
+      } catch {
+        /* SW may be restarting */
+      }
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => {
       alive = false;
       clearInterval(id);
+      for (const p of ports.values()) p.close();
+      ports.clear();
     };
   }, []);
 
@@ -80,20 +173,39 @@ export default function App() {
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
-            {active.map((a) => (
-              <li key={a.jobId} className="rounded-xl border border-border bg-bg-elevated p-3 shadow-card">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-[11px] text-fg-muted" title={a.url}>
-                    {a.url}
-                  </span>
-                  <Badge tone={a.status === 'downloading' ? 'ok' : 'accent'}>{a.status}</Badge>
-                </div>
-                <div className="mt-2">
-                  <ProgressBar value={a.ratio} />
-                  <span className="mt-1 block text-[11px] text-fg-muted">{Math.round(a.ratio * 100)}%</span>
-                </div>
-              </li>
-            ))}
+            {active.map((a) => {
+              const isPaused = a.status === 'paused';
+              const running = !isPaused && a.status !== 'complete' && a.status !== 'error' && a.status !== 'canceled';
+              return (
+                <li key={a.jobId} className="rounded-xl border border-border bg-bg-elevated p-3 shadow-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] text-fg-muted" title={a.url}>
+                      {a.url}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Badge tone={a.status === 'downloading' ? 'ok' : a.status === 'paused' ? 'warn' : 'accent'}>{a.status}</Badge>
+                      {running && (
+                        <Button variant="ghost" size="sm" onClick={() => pauseJob(a.jobId)} title={t('manager.pause')}>
+                          ⏸
+                        </Button>
+                      )}
+                      {isPaused && (
+                        <Button variant="ghost" size="sm" onClick={() => resumeJob(a.jobId)} title={t('manager.resume')}>
+                          ▶
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => cancelJob(a.jobId)} title={t('popup.cancel')}>
+                        ✕
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <ProgressBar value={a.ratio} />
+                    <span className="mt-1 block text-[11px] text-fg-muted">{Math.round(a.ratio * 100)}%</span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -108,6 +220,8 @@ export default function App() {
               <li
                 key={h.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated p-3"
+                onDoubleClick={() => void openHistoryFile(h)}
+                title={t('manager.openFile')}
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm text-fg">{h.filename}</p>
@@ -128,7 +242,22 @@ export default function App() {
                   >
                     {h.status}
                   </Badge>
-                  <Button variant="ghost" size="sm" onClick={() => removeHistory(h.id).then(() => listHistory().then(setHistory))}>
+                  {h.status === 'complete' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void openHistoryFile(h)}
+                      title={t('manager.openFile')}
+                    >
+                      ▶
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void deleteHistoryHard(h).then(() => listHistory().then(setHistory))}
+                    title={t('manager.delete')}
+                  >
                     ✕
                   </Button>
                 </div>

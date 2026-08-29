@@ -8,6 +8,11 @@ export type Request =
   | { type: 'SCAN_PAGE'; tabId: number }
   | { type: 'START_DOWNLOAD'; payload: StartDownloadPayload }
   | { type: 'CANCEL_DOWNLOAD'; jobId: string }
+  | { type: 'PAUSE_DOWNLOAD'; jobId: string }
+  | { type: 'RESUME_DOWNLOAD'; jobId: string }
+  | { type: 'DELETE_DOWNLOAD'; jobId: string }
+  | { type: 'OPEN_HISTORY_FILE'; historyId: string }
+  | { type: 'SHOW_HISTORY_FILE'; historyId: string }
   | { type: 'GET_ACTIVE' }
   | { type: 'OPEN_MANAGER' }
   | { type: 'APPLY_PROXY'; config: import('./proxyShim').ProxyConfig }

@@ -10,6 +10,10 @@ export const SettingsSchema = z.object({
   domScan: z.boolean().default(true),
   format: z.enum(['mp4', 'ts', 'auto']).default('auto'),
   concurrency: z.number().int().min(1).max(20).default(8),
+  /** Per-segment retry attempts on network/HTTP errors (0 = no retry). */
+  segmentRetries: z.number().int().min(0).max(10).default(3),
+  /** Resume partially downloaded videos by skipping already-fetched segments. */
+  resumeEnabled: z.boolean().default(true),
   defaultQuality: z.enum(['highest', 'lowest']).default('highest'),
   downloadDir: z.string().default(''),
   proxy: z
