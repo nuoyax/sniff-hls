@@ -145,6 +145,22 @@ export default function App() {
       <p className="mt-8 text-[11px] text-fg-muted">
         Sniffls · v0.1.0 · MIT
       </p>
+
+      <div className="mt-4 flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={async () => {
+            // setSettings merges, so pass every default key explicitly.
+            const { schemaVersion: _sv, ...defaults } = DEFAULT_SETTINGS;
+            await setSettings(defaults);
+            setProxyMsg(t('settings.reset.done'));
+          }}
+        >
+          {t('settings.reset')}
+        </Button>
+        <span className="text-[11px] text-fg-muted">{t('settings.persist.hint')}</span>
+      </div>
     </div>
   );
 }
