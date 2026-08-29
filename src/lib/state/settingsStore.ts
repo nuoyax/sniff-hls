@@ -22,7 +22,7 @@ export const SettingsSchema = z.object({
     })
     .default({ mode: 'none' }),
   theme: z.enum(['system', 'light', 'dark']).default('system'),
-  locale: z.enum(['auto', 'en', 'zh-CN']).default('auto'),
+  locale: z.enum(['auto', 'en', 'zh-CN']).default('en'),
   notifyOnComplete: z.boolean().default(true),
   telemetry: z.boolean().default(false),
   debug: z.boolean().default(false),
