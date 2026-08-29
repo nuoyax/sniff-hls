@@ -7,9 +7,20 @@ import { bapi } from '@/lib/platform/browser';
  */
 export async function openOrFocusPage(page: string): Promise<void> {
   const url = bapi.runtime.getURL(page);
+  // Compare by page filename rather than exact origin: in WXT dev mode the
+  // pages are served from http://localhost:<port>/, so an extension-URL
+  // query would never match and a duplicate tab would open every time.
+  const targetPath = `/${page}`;
   try {
-    const tabs = await bapi.tabs.query({ url });
-    const existing = tabs[0];
+    const tabs = await bapi.tabs.query({});
+    const existing = tabs.find((t: any) => {
+      if (!t.url) return false;
+      try {
+        return new URL(t.url).pathname === targetPath;
+      } catch {
+        return false;
+      }
+    });
     if (existing?.id != null) {
       await bapi.tabs.update(existing.id, { active: true });
       if (existing.windowId != null) {
