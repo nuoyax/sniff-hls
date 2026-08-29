@@ -3,8 +3,10 @@ import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
 import { ProgressBar } from '@/components/Progress';
 import { EmptyState } from '@/components/EmptyState';
+import { PageShell } from '@/components/PageShell';
 import { sendMessage } from '@/lib/platform/messaging';
 import { listHistory, subscribeHistory, clearHistory, removeHistory } from '@/lib/state/historyStore';
+import { useI18n } from '@/lib/i18n';
 import type { DownloadProgress, HistoryEntry } from '@/lib/types';
 
 interface ActiveView {
@@ -18,6 +20,9 @@ interface ActiveView {
 export default function App() {
   const [active, setActive] = useState<ActiveView[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [page, setPage] = useState(1);
+  const { t } = useI18n();
+  const pageSize = 20;
 
   useEffect(() => {
     listHistory().then(setHistory);
@@ -49,25 +54,29 @@ export default function App() {
     };
   }, []);
 
+  const pageCount = Math.max(1, Math.ceil(history.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paged = history.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-fg">Download Manager</h1>
-          <p className="text-sm text-fg-muted">Live downloads and history.</p>
-        </div>
-        {history.length > 0 && (
+    <PageShell
+      page="manager"
+      title={t('manager.title')}
+      subtitle={t('manager.subtitle')}
+      actions={
+        history.length > 0 ? (
           <Button variant="ghost" size="sm" onClick={() => clearHistory().then(() => listHistory().then(setHistory))}>
-            Clear history
+            {t('manager.clearHistory')}
           </Button>
-        )}
-      </header>
+        ) : undefined
+      }
+    >
 
       <section className="mb-8">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Active</h2>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('manager.active')}</h2>
         {active.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-fg-muted">
-            No active downloads.
+            {t('manager.active.empty')}
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -90,12 +99,12 @@ export default function App() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">History</h2>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t('manager.history')}</h2>
         {history.length === 0 ? (
-          <EmptyState title="No downloads yet" hint="Your completed and failed downloads will appear here." />
+          <EmptyState title={t('manager.history.empty.title')} hint={t('manager.history.empty.hint')} />
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {history.map((h) => (
+            {paged.map((h) => (
               <li
                 key={h.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated p-3"
@@ -127,8 +136,21 @@ export default function App() {
             ))}
           </ul>
         )}
+        {pageCount > 1 && (
+          <div className="mt-3 flex items-center justify-center gap-3 text-sm text-fg-muted">
+            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              ‹ {t('pager.prev')}
+            </Button>
+            <span className="text-[11px]">
+              {t('pager.page')} {page} / {pageCount}
+            </span>
+            <Button variant="ghost" size="sm" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>
+              {t('pager.next')} ›
+            </Button>
+          </div>
+        )}
       </section>
-    </div>
+    </PageShell>
   );
 }
 

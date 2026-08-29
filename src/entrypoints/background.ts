@@ -16,6 +16,7 @@ import { addHistory, updateHistory, listHistory } from '@/lib/state/historyStore
 import { setBadge, clearBadge, type BadgeState } from '@/lib/detection/badge';
 import { ensureHost, markHostReady, sendToHost, setupHostPort } from '@/lib/engine/hostManager';
 import { applyProxy, clearProxy } from '@/lib/platform/proxyShim';
+import { openOrFocusPage } from '@/lib/platform/pageOpener';
 import { sanitizeFilename } from '@/lib/platform/downloadsShim';
 import { DownloadEngine } from '@/lib/engine/engine';
 import { ExtensionError } from '@/lib/errors';
@@ -211,11 +212,13 @@ async function handleMessage(req: Request): Promise<Response> {
       return { ok: true, data: Object.fromEntries(activeJobs) };
     }
     case 'OPEN_MANAGER': {
-      await bapi.tabs.create({ url: bapi.runtime.getURL('download-manager.html') });
+      await openOrFocusPage('download-manager.html');
       return { ok: true };
     }
     case 'APPLY_PROXY': {
       const r = await applyProxy(req.config);
+      // Persist the applied config so it survives SW restarts / browser relaunch.
+      if (r.ok) await setSettings({ proxy: req.config });
       return { ok: r.ok, error: r.ok ? undefined : r.message, data: r.message };
     }
     case 'CLEAR_PROXY': {
@@ -254,9 +257,16 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
   // a defense-in-depth (also normalizes for programmatic START_DOWNLOAD calls).
   const baseFilename = sanitizeFilename(req.payload.baseFilename || deriveBaseFilename(req.payload.url));
 
-  // Apply the user's configured download subfolder, if any.
-  const subfolder = (s.subfolder || '').trim().replace(/[<>:"/\\|?*]/g, '').replace(/^\/+|\/+$/g, '');
-  const fullFilename = subfolder ? `${subfolder}/${baseFilename}.mp4` : `${baseFilename}.mp4`;
+  // Apply the user's configured download directory, if any. Supports absolute
+  // paths (C:\Videos or /home/user/Videos) — chrome.downloads.filename accepts
+  // absolute paths on desktop. Strip only characters illegal in a path while
+  // preserving separators, drive letters and a leading '/'.
+  const dir = (s.downloadDir || '')
+    .trim()
+    .replace(/[<>:"|?*]/g, '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+  const fullFilename = dir ? `${dir}/${baseFilename}.mp4` : `${baseFilename}.mp4`;
 
   const job: DownloadJob = {
     id: jobId,
