@@ -349,8 +349,9 @@ function StreamItem({
               <span title={active?.error}>{t('popup.failed')}</span>
             </Badge>
           ) : (
-            <Button variant="ghost" size="sm" className="h-6 w-6 px-0" onClick={() => trigger(best)} title={t('popup.download')}>
-              <DownloadIcon className="h-3.5 w-3.5" />
+            <Button variant="primary" size="sm" className="h-7 gap-1 px-3" onClick={() => trigger(best)} title={t('popup.download')}>
+              <DownloadIcon className="h-4 w-4" />
+              {t('popup.download')}
             </Button>
           )}
         </div>
