@@ -1,6 +1,7 @@
 import { Settings } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { useI18n } from '@/lib/i18n';
+import iconUrl from '@/assets/icon.svg';
 
 /**
  * Shared page header for full-page UIs (options, download manager).
@@ -21,7 +22,7 @@ export function PageHeader({
   return (
     <header className="mb-6 flex items-start justify-between border-b border-border pb-4">
       <div className="flex items-center gap-3">
-        <img src="/icon/128.png" alt="" className="h-9 w-9 rounded-lg" />
+        <img src={iconUrl} alt="" className="h-9 w-9" />
         <div>
           <h1 className="text-xl font-semibold text-fg">{title ?? t('app.name')}</h1>
           {subtitle && <p className="text-sm text-fg-muted">{subtitle}</p>}
