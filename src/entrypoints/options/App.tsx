@@ -13,23 +13,33 @@ export default function App() {
   const { t } = useI18n();
 
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Draft state: edits stay local until the user clicks Save.
+  // (Hooks must run unconditionally — declared before any early return.)
+  const [draft, setDraft] = useState<Settings | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   useEffect(() => {
     let unsub = () => {};
     getSettings()
       .then((v) => {
         setS(v);
+        setDraft(v);
         unsub = subscribeSettings((next) => { setS({ ...next }); if (!dirtyRef.current) setDraft({ ...next }); });
       })
       .catch((e) => {
         setLoadError((e as Error).message || String(e));
         // Still render defaults so the page is usable outside a broken storage context.
         setS({ ...DEFAULT_SETTINGS });
+        setDraft({ ...DEFAULT_SETTINGS });
       });
     return () => unsub();
   }, []);
 
-  if (!s) {
+  if (!s || !draft) {
     return (
       <div className="p-8 text-fg-muted">
         {loadError ? `Failed to load settings: ${loadError}` : 'Loading…'}
@@ -37,15 +47,8 @@ export default function App() {
     );
   }
 
-  // Draft state: edits stay local until the user clicks Save.
-  const [draft, setDraft] = useState<Settings>(s);
-  const [dirty, setDirty] = useState(false);
-  const [savedMsg, setSavedMsg] = useState('');
-
-  const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
   const update = (patch: Partial<Settings>) => {
-    setDraft((d) => ({ ...d, ...patch }));
+    setDraft((d) => (d ? { ...d, ...patch } : d));
     setDirty(true);
     setSavedMsg('');
   };
