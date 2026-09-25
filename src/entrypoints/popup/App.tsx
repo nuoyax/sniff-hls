@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { sendMessage, openProgressPort, type ProgressEvent } from '@/lib/platform/messaging';
+import { openOrFocusPage } from '@/lib/platform/pageOpener';
 import type { DetectedItem, DownloadProgress, OutputFormat, VariantInfo } from '@/lib/types';
 import { Button } from '@/components/Button';
 import { Badge, qualityLabel } from '@/components/Badge';
 import { EmptyState } from '@/components/EmptyState';
 import { ProgressRing } from '@/components/Progress';
 import { Settings, RefreshCw, Download as DownloadIcon, ListVideo, Edit3, Check } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 import { deriveBaseFilename, buildDefaultFilename, sanitizeTitleStem, timestampString } from '@/lib/detection/urlNormalizer';
 import { getSettings } from '@/lib/state/settingsStore';
 
@@ -18,6 +20,7 @@ interface ActiveDownload {
 }
 
 export default function App() {
+  const { t } = useI18n();
   const [detections, setDetections] = useState<DetectedItem[]>([]);
   const [tabId, setTabId] = useState<number | null>(null);
   const [pageUrl, setPageUrl] = useState<string | undefined>();
@@ -89,7 +92,10 @@ export default function App() {
 
   const refresh = useCallback(async (tid: number) => {
     const res = await sendMessage({ type: 'GET_DETECTIONS', tabId: tid });
-    if (res.ok && Array.isArray(res.data)) setDetections(res.data as DetectedItem[]);
+    if (res.ok && Array.isArray(res.data)) {
+      // Hide entries whose pre-flight probe failed (dead / expired links).
+      setDetections((res.data as DetectedItem[]).filter((d) => !d.dead));
+    }
   }, []);
 
   // Keep popup download badges in sync with the SW (ports alone miss jobs
@@ -137,8 +143,8 @@ export default function App() {
     setTimeout(() => refresh(tabId), 800);
   }, [tabId, refresh]);
 
-  const openOptions = useCallback(() => {
-    chrome.runtime.openOptionsPage?.() ?? browser.runtime.openOptionsPage();
+  const openOptions = useCallback(async () => {
+    await openOrFocusPage('options.html');
   }, []);
 
   const openManager = useCallback(async () => {
@@ -192,11 +198,6 @@ export default function App() {
     [tabId, pageUrl, pageTitle],
   );
 
-  const cancel = useCallback(async (jobId: string, url: string) => {
-    await sendMessage({ type: 'CANCEL_DOWNLOAD', jobId });
-    setActive((a) => ({ ...a, [url]: { ...a[url], status: 'canceled' } }));
-  }, []);
-
   if (loading) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-fg-muted">Loading…</div>
@@ -216,13 +217,13 @@ export default function App() {
           {pageUrl && <span className="max-w-[140px] truncate text-[11px] text-fg-muted">{hostOf(pageUrl)}</span>}
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={onScan} title="Scan page">
+          <Button variant="ghost" size="sm" onClick={onScan} title={t('popup.scan')}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={openManager} title="Download manager">
+          <Button variant="ghost" size="sm" onClick={openManager} title={t('popup.manager')}>
             <ListVideo className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={openOptions} title="Settings">
+          <Button variant="ghost" size="sm" onClick={openOptions} title={t('header.settings')}>
             <Settings className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -230,18 +231,18 @@ export default function App() {
 
       {!autoDetect && (
         <div className="border-b border-warn/30 bg-warn/5 px-4 py-2 text-[11px] text-warn">
-          Auto-detect is off. Use the refresh button to scan this page.
+          {t('popup.autodetect.off')}
         </div>
       )}
 
       <div className="max-h-[440px] overflow-y-auto p-2">
         {detections.length === 0 ? (
           <EmptyState
-            title="No m3u8 detected yet"
-            hint="Open a page with HLS video, or click refresh to scan the page."
+            title={t('popup.empty.title')}
+            hint={t('popup.empty.hint')}
             action={
               <Button variant="primary" size="sm" onClick={onScan}>
-                <RefreshCw className="h-3.5 w-3.5" /> Scan page
+                <RefreshCw className="h-3.5 w-3.5" /> {t('popup.scan')}
               </Button>
             }
           />
@@ -255,7 +256,13 @@ export default function App() {
                 quality={quality}
                 active={active[d.url]}
                 onDownload={(v, fname) => startDownload(d.url, v, fname)}
-                onCancel={() => active[d.url] && cancel(active[d.url].jobId, d.url)}
+                onPauseResume={(pause) =>
+                  active[d.url] &&
+                  sendMessage({
+                    type: 'RESUME_DOWNLOAD',
+                    jobId: active[d.url].jobId,
+                  })
+                }
               />
             ))}
           </ul>
@@ -263,7 +270,7 @@ export default function App() {
       </div>
 
       <footer className="border-t border-border px-4 py-2 text-[11px] text-fg-muted">
-        Detected: {detections.length} ·{' '}
+        {t('popup.detected')}: {detections.length} ·{' '}
         <a
           href="#"
           onClick={(e) => {
@@ -272,7 +279,7 @@ export default function App() {
           }}
           className="text-accent hover:underline"
         >
-          open manager
+          {t('popup.openManager')}
         </a>
       </footer>
     </div>
@@ -285,14 +292,14 @@ function StreamItem({
   quality,
   active,
   onDownload,
-  onCancel,
+  onPauseResume,
 }: {
   item: DetectedItem;
   pageTitle?: string;
   quality: 'highest' | 'lowest';
   active?: ActiveDownload;
   onDownload: (variant?: VariantInfo, filename?: string) => void;
-  onCancel: () => void;
+  onPauseResume: (pause: boolean) => void;
 }) {
   const variants = item.variants ?? [];
   // The main Download button honours the user's quality preference; the list
@@ -300,6 +307,7 @@ function StreamItem({
   const preferred =
     quality === 'lowest' ? variants[0] : variants[variants.length - 1];
   const best = preferred;
+  const { t } = useI18n();
   const isDownloading = active && ['fetching', 'decrypting', 'transmuxing', 'assembling', 'downloading'].includes(active.status);
   const isDone = active?.status === 'complete';
   const isError = active?.status === 'error';
@@ -337,24 +345,26 @@ function StreamItem({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isDownloading ? (
+            <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
+              <ProgressRing value={active!.ratio} />
+              {Math.round((active!.ratio || 0) * 100)}%
+            </span>
+          ) : active?.status === 'paused' ? (
             <>
-              <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
-                <ProgressRing value={active!.ratio} />
-                {Math.round((active!.ratio || 0) * 100)}%
-              </span>
-              <Button variant="ghost" size="sm" onClick={onCancel} title="Cancel">
-                ✕
+              <Badge tone="warn">{t('manager.pause')}</Badge>
+              <Button variant="ghost" size="sm" onClick={() => onPauseResume(true)} title={t('manager.resume')}>
+                ▶
               </Button>
             </>
           ) : isDone ? (
-            <Badge tone="ok">✓ done</Badge>
+            <Badge tone="ok">{t('popup.done')}</Badge>
           ) : isError ? (
-            <Badge tone="danger" >
-              <span title={active?.error}>failed</span>
+            <Badge tone="danger">
+              <span title={active?.error}>{t('popup.failed')}</span>
             </Badge>
           ) : (
-            <Button variant="primary" size="sm" onClick={() => trigger(best)}>
-              <DownloadIcon className="h-3.5 w-3.5" /> Download
+            <Button variant="primary" size="sm" className="h-9 w-9 px-0" onClick={() => trigger(best)} title={t('popup.download')}>
+              <DownloadIcon className="h-5 w-5" />
             </Button>
           )}
         </div>
@@ -373,11 +383,11 @@ function StreamItem({
                   if (e.key === 'Enter') { setEditing(false); trigger(best); }
                   if (e.key === 'Escape') { setEditing(false); setName(defaultStem); }
                 }}
-                placeholder="filename"
+                placeholder={t('popup.filename')}
                 className="min-w-0 flex-1 rounded-md border border-accent/50 bg-bg px-2 py-1 text-[11px] text-fg focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/60"
               />
               <span className="shrink-0 font-mono text-[10px] text-fg-muted">_&lt;ts&gt;.mp4</span>
-              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); trigger(best); }} title="Confirm">
+              <Button variant="ghost" size="sm" onClick={() => { setEditing(false); trigger(best); }} title={t('popup.confirm')}>
                 <Check className="h-3.5 w-3.5" />
               </Button>
             </>
@@ -385,7 +395,7 @@ function StreamItem({
             <button
               onClick={() => setEditing(true)}
               className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-[11px] text-fg-muted hover:border-accent/40 hover:text-fg"
-              title="Click to rename"
+              title={t('popup.rename')}
             >
               <Edit3 className="h-3 w-3 shrink-0" />
               <span className="truncate">{name}</span>

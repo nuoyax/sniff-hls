@@ -61,6 +61,13 @@ export default defineConfig({
           strict_min_version: '115.0',
         },
       };
+      // mediabunny spawns blob: URL workers (timer/remux helpers) inside the
+      // download-runner page. Firefox's default MV3 CSP has no worker-src, so
+      // it falls back to script-src and blocks blob: workers — allow them.
+      manifest.content_security_policy = {
+        extension_pages:
+          "script-src 'self' 'wasm-unsafe-eval' http://localhost:3001; object-src 'self'; worker-src 'self' blob:;",
+      };
     }
 
     return manifest;

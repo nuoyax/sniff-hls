@@ -22,6 +22,12 @@ export interface PoolOptions {
    * `decryptor`/`keyInfo` so key-rotating playlists decrypt correctly.
    */
   resolveDecryptor?: (segment: Segment) => Decryptor | undefined;
+  /** Retry attempts per segment on network/HTTP errors (default 3). */
+  retries?: number;
+  /** Segment indices to skip (already fetched in a previous attempt — resume). */
+  skipIndices?: Set<number>;
+  /** Called after a segment is fetched+decrypted (for resume checkpoints). */
+  onSegmentDone?: (sequence: number) => void;
   onProgress?: (done: number, total: number, bytes: number) => void;
   signal?: AbortSignal;
 }
@@ -42,10 +48,33 @@ export class SegmentPool {
   private buffered = 0;
   private bytesLoaded = 0;
   private done = 0;
+  /** When set, new segment launches are held back (pause support). */
+  private paused = false;
+  private resumeWaiters: (() => void)[] = [];
 
   constructor(opts: PoolOptions) {
     this.opts = opts;
     this.decryptor = opts.decryptor ?? null;
+  }
+
+  /** Pause launching new segments. In-flight requests are left to finish and
+   * their bytes kept; nothing new starts while paused. The SW broadcasts
+   * 'paused' instantly, so no progress event is needed here. */
+  pause(): void {
+    this.paused = true;
+  }
+
+  /** Resume launching segments. */
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    for (const w of this.resumeWaiters.splice(0)) w();
+  }
+
+  private async waitWhilePaused(): Promise<void> {
+    while (this.paused) {
+      await new Promise<void>((r) => this.resumeWaiters.push(r));
+    }
   }
 
   async *run(segments: Segment[]): AsyncIterable<SegmentResult> {
@@ -54,9 +83,13 @@ export class SegmentPool {
     const results = new Map<number, Uint8Array>();
     const queue: Pending[] = [];
     let inputIndex = 0;
+    const skip = this.opts.skipIndices;
 
     const launch = (seg: Segment) => {
-      const promise = this.fetchOne(seg);
+      const promise = (async () => {
+        await this.waitWhilePaused();
+        return this.fetchOne(seg);
+      })();
       // Segments fetched ahead of the head may reject while the caller is still
       // awaiting an earlier one; mark those handles as observed so Node/the
       // browser doesn't report an unhandled rejection.
@@ -64,8 +97,12 @@ export class SegmentPool {
       queue.push({ segment: seg, promise, index: inputIndex++ });
     };
 
-    // Prime the queue.
+    // Prime the queue, skipping segments already fetched in a prior attempt.
     while (queue.length < this.opts.concurrency && inputIndex < segments.length) {
+      if (skip?.has(segments[inputIndex].sequence)) {
+        inputIndex++;
+        continue;
+      }
       launch(segments[inputIndex]);
     }
 
@@ -83,11 +120,14 @@ export class SegmentPool {
 
       results.set(head.index, bytes);
 
-      // Emit any contiguous results.
-      while (results.has(emitIndex)) {
-        const b = results.get(emitIndex)!;
-        results.delete(emitIndex);
-        yield { sequence: emitIndex, bytes: b };
+      // Emit any contiguous results, advancing past skipped segments
+      // (they were fetched in a prior attempt and are re-injected by the caller).
+      while (results.has(emitIndex) || skip?.has(emitIndex)) {
+        if (results.has(emitIndex)) {
+          const b = results.get(emitIndex)!;
+          results.delete(emitIndex);
+          yield { sequence: emitIndex, bytes: b };
+        }
         emitIndex++;
       }
 
@@ -97,6 +137,14 @@ export class SegmentPool {
         inputIndex < segments.length &&
         this.buffered < (this.opts.maxBufferedBytes ?? 256 * 1024 * 1024)
       ) {
+        if (this.paused) {
+          await this.waitWhilePaused();
+          continue;
+        }
+        if (skip?.has(segments[inputIndex].sequence)) {
+          inputIndex++;
+          continue;
+        }
         launch(segments[inputIndex]);
       }
     }
@@ -107,7 +155,7 @@ export class SegmentPool {
     const raw = await fetchBytes(seg.url, {
       byterange: seg.byterange,
       timeoutMs: 90_000,
-      retries: 3,
+      retries: this.opts.retries ?? 3,
     });
     if (this.opts.signal?.aborted) throw new Error('canceled');
     const decryptor =
@@ -116,6 +164,7 @@ export class SegmentPool {
     this.buffered += dec.length;
     this.bytesLoaded += dec.length;
     this.done++;
+    this.opts.onSegmentDone?.(seg.sequence);
     this.opts.onProgress?.(this.done, 0, this.bytesLoaded);
     return dec;
   }

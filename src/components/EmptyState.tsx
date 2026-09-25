@@ -13,8 +13,11 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-subtle text-fg-muted">
-        <Search className="h-5 w-5" />
+      <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-bg-subtle text-fg-muted">
+        {/* Breathing halo */}
+        <span className="pointer-events-none absolute inset-0 rounded-full bg-accent/40 animate-halo" />
+        <span className="pointer-events-none absolute inset-0 rounded-full bg-accent/25 animate-halo [animation-delay:1s]" />
+        <Search className="relative h-5 w-5 text-white" />
       </div>
       <div>
         <p className="text-sm font-medium text-fg">{title}</p>

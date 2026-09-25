@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sniffls · 安装指南</title>
+<style>
+  :root {
+    --indigo: #6366f1;
+    --violet: #7c3aed;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --code-bg: #0f172a;
+    --ok: #16a34a;
+    --warn: #d97706;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, var(--indigo), var(--violet));
+    color: #fff;
+    padding: 40px 20px 56px;
+    border-radius: 0 0 28px 28px;
+  }
+  .hero .brand {
+    display: flex; align-items: center; gap: 14px;
+    max-width: 880px; margin: 0 auto;
+  }
+  .hero .logo {
+    width: 52px; height: 52px; border-radius: 14px;
+    background: rgba(255,255,255,.14);
+    display: grid; place-items: center;
+    flex: none;
+  }
+  .hero h1 { margin: 0; font-size: 26px; letter-spacing: -.5px; }
+  .hero .sub { margin: 4px 0 0; opacity: .85; font-size: 14px; }
+  .hero .pills { max-width: 880px; margin: 22px auto 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.22);
+    padding: 5px 12px; border-radius: 999px; font-size: 12.5px;
+  }
+
+  h2 { font-size: 20px; margin: 40px 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 18px; }
+
+  /* Prereq card */
+  .prereq {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 0 0 24px;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .prereq .ic { flex: none; color: var(--indigo); font-size: 18px; }
+  .prereq b { color: var(--ink); }
+
+  /* Tabs */
+  .tabs { position: relative; }
+  .tab-input { position: absolute; opacity: 0; pointer-events: none; }
+  .tab-labels {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 22px;
+  }
+  .tab-label {
+    cursor: pointer; user-select: none;
+    padding: 12px 18px;
+    font-size: 14.5px; font-weight: 600;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: flex; align-items: center; gap: 8px;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-label:hover { color: var(--ink); }
+  .tab-label .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .tab-panels { display: contents; }
+  .tab-panel { display: none; animation: fade .2s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  #tab-chrome:checked    ~ .tab-labels [for="tab-chrome"],
+  #tab-edge:checked      ~ .tab-labels [for="tab-edge"],
+  #tab-firefox:checked   ~ .tab-labels [for="tab-firefox"],
+  #tab-safari:checked    ~ .tab-labels [for="tab-safari"] {
+    color: var(--indigo);
+    border-bottom-color: var(--indigo);
+  }
+  #tab-chrome:checked  ~ .tab-panels #panel-chrome,
+  #tab-edge:checked    ~ .tab-panels #panel-edge,
+  #tab-firefox:checked ~ .tab-panels #panel-firefox,
+  #tab-safari:checked  ~ .tab-panels #panel-safari { display: block; }
+
+  /* Panels */
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px;
+  }
+  .meta {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .meta .k { color: var(--muted); display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+  .meta .v { font-weight: 600; }
+
+  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  ol.steps > li {
+    position: relative; padding: 10px 0 10px 44px; border-bottom: 1px dashed var(--line);
+  }
+  ol.steps > li:last-child { border-bottom: 0; }
+  ol.steps > li::before {
+    counter-increment: s; content: counter(s);
+    position: absolute; left: 0; top: 9px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--indigo), var(--violet));
+    color: #fff; font-size: 13px; font-weight: 700;
+    display: grid; place-items: center;
+  }
+  ol.steps code, p code, .note code {
+    background: #eef2ff; color: var(--violet);
+    padding: 2px 6px; border-radius: 6px; font-size: 13px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  .code {
+    position: relative; margin: 14px 0;
+    background: var(--code-bg); color: #e2e8f0;
+    border-radius: 12px; padding: 14px 46px 14px 16px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13.5px; overflow-x: auto;
+  }
+  .code .cmt { color: #64748b; }
+  .code .out { color: #38bdf8; }
+  .copy {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(255,255,255,.08); color: #cbd5e1;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 7px; padding: 4px 9px; font-size: 11px;
+    cursor: pointer; transition: background .15s, color .15s;
+  }
+  .copy:hover { background: rgba(255,255,255,.18); color: #fff; }
+  .copy.ok { color: #4ade80; }
+
+  .note {
+    border-left: 3px solid var(--warn);
+    background: #fffbeb;
+    border-radius: 0 10px 10px 0;
+    padding: 12px 14px; margin: 16px 0;
+    font-size: 13.5px;
+  }
+  .note.ok { border-left-color: var(--ok); background: #f0fdf4; }
+  .note b { color: var(--ink); }
+
+  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+  footer a { color: var(--indigo); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="brand">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 104 104" aria-hidden="true">
+        <path d="M40 26 H66 V49 H78 L53 75 L28 49 H40 Z" fill="#fff"/>
+        <rect x="28" y="82" width="50" height="7.5" rx="3.75" fill="#fff"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Sniffls 安装指南</h1>
+      <div class="sub">一键构建 · 分浏览器加载 · Chrome / Edge / Firefox / Safari</div>
+    </div>
+  </div>
+  <div class="pills">
+    <span class="pill">Manifest V3</span>
+    <span class="pill">WXT + React + TS</span>
+    <span class="pill">v0.1.5</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <h2>前置准备</h2>
+  <p class="lead">所有浏览器都从同一份源码构建，先装好依赖。</p>
+  <div class="prereq">
+    <div class="ic">⬇</div>
+    <div>
+      <b>Node.js 20+</b> &nbsp;·&nbsp; 在项目根目录执行一次：
+      <div class="code"><button class="copy">复制</button><span class="cmt">$ </span>npm install</div>
+    </div>
+  </div>
+
+  <h2>选择你的浏览器</h2>
+  <p class="lead">点击下方对应标签查看构建与加载步骤。</p>
+
+  <div class="tabs">
+    <input class="tab-input" type="radio" name="tabs" id="tab-chrome" checked />
+    <input class="tab-input" type="radio" name="tabs" id="tab-edge" />
+    <input class="tab-input" type="radio" name="tabs" id="tab-firefox" />
+    <input class="tab-input" type="radio" name="tabs" id="tab-safari" />
+
+    <div class="tab-labels">
+      <label class="tab-label" for="tab-chrome"><span class="dot"></span>Chrome</label>
+      <label class="tab-label" for="tab-edge"><span class="dot"></span>Edge</label>
+      <label class="tab-label" for="tab-firefox"><span class="dot"></span>Firefox</label>
+      <label class="tab-label" for="tab-safari"><span class="dot"></span>Safari</label>
+    </div>
+
+    <div class="tab-panels">
+
+      <!-- CHROME -->
+      <div class="tab-panel" id="panel-chrome">
+        <div class="meta-row">
+          <div class="meta"><span class="k">构建命令</span><span class="v">npm run build</span></div>
+          <div class="meta"><span class="k">产物目录</span><span class="v">.output/chrome-mv3/</span></div>
+          <div class="meta"><span class="k">最低版本</span><span class="v">Chrome 109+</span></div>
+        </div>
+        <div class="code"><button class="copy">复制</button><span class="cmt"># 构建 Chrome / Edge（同一份 Chromium 产物）</span>
+<span class="cmt">$ </span>npm run build
+<span class="cmt"># → .output\chrome-mv3\</span></div>
+        <ol class="steps">
+          <li>打开 <code>chrome://extensions</code></li>
+          <li>开启右上角的 <b>开发者模式</b>（Developer mode）</li>
+          <li>点击 <b>加载已解压的扩展程序</b>（Load unpacked）</li>
+          <li>选择文件夹 <code>.output/chrome-mv3/</code></li>
+          <li>工具栏出现 Sniffls 图标，建议固定（pin）方便使用</li>
+        </ol>
+        <div class="note ok"><b>提示：</b>Chrome 与 Edge 共用同一份 Chromium 产物，Edge 加载时选同一个 <code>chrome-mv3</code> 文件夹即可。</div>
+      </div>
+
+      <!-- EDGE -->
+      <div class="tab-panel" id="panel-edge">
+        <div class="meta-row">
+          <div class="meta"><span class="k">构建命令</span><span class="v">npm run build</span></div>
+          <div class="meta"><span class="k">产物目录</span><span class="v">.output/chrome-mv3/</span></div>
+          <div class="meta"><span class="k">最低版本</span><span class="v">Edge 109+</span></div>
+        </div>
+        <div class="code"><button class="copy">复制</button><span class="cmt"># Edge 复用 Chromium 构建</span>
+<span class="cmt">$ </span>npm run build
+<span class="cmt"># → .output\chrome-mv3\</span></div>
+        <ol class="steps">
+          <li>打开 <code>edge://extensions</code></li>
+          <li>开启左侧边栏的 <b>开发人员模式</b>（Developer mode）</li>
+          <li>点击 <b>加载解压缩的扩展</b>（Load unpacked）</li>
+          <li>选择文件夹 <code>.output/chrome-mv3/</code></li>
+          <li>在工具栏固定 Sniffls 图标</li>
+        </ol>
+        <div class="note"><b>分发：</b>如需打包成 <code>.zip</code> 供内部分发，运行 <code>npm run zip</code>，产物在 <code>.output/sniff-hls-0.1.5-chrome.zip</code>。</div>
+      </div>
+
+      <!-- FIREFOX -->
+      <div class="tab-panel" id="panel-firefox">
+        <div class="meta-row">
+          <div class="meta"><span class="k">构建命令</span><span class="v">npm run build:firefox</span></div>
+          <div class="meta"><span class="k">产物目录</span><span class="v">.output/firefox-mv3/</span></div>
+          <div class="meta"><span class="k">最低版本</span><span class="v">Firefox 115+</span></div>
+        </div>
+        <div class="code"><button class="copy">复制</button><span class="cmt"># 构建 Firefox</span>
+<span class="cmt">$ </span>npm run build:firefox
+<span class="cmt"># → .output\firefox-mv3\</span></div>
+
+        <div class="note ok"><b>方式一 · 临时加载（最快）</b> — 重启 Firefox 后失效</div>
+        <ol class="steps">
+          <li>地址栏打开 <code>about:debugging#/runtime/this-firefox</code></li>
+          <li>点击 <b>临时加载附加组件…</b>（Load Temporary Add-on…）</li>
+          <li>选择文件 <code>.output/firefox-mv3/manifest.json</code>（选 manifest，不是文件夹）</li>
+          <li>扩展立即加载，工具栏出现 Sniffls 图标</li>
+        </ol>
+
+        <div class="note"><b>方式二 · 永久安装</b> — 需 Developer / ESR / Nightly 版或上架 AMO</div>
+        <div class="code"><button class="copy">复制</button><span class="cmt"># 打包成 zip / xpi</span>
+<span class="cmt">$ </span>npm run zip:firefox
+<span class="cmt"># → .output\sniff-hls-0.1.5-firefox.zip</span>
+<span class="cmt"># 改后缀即 .xpi：cp sniff-hls-0.1.5-firefox.zip sniff-hls-0.1.5-firefox.xpi</span></div>
+        <ol class="steps">
+          <li>在 <code>about:config</code> 中设置 <code>xpinstall.signatures.required = false</code>（仅 Developer/ESR/Nightly 可改）</li>
+          <li>把 <code>.xpi</code> 文件拖进 Firefox 窗口</li>
+          <li>确认安装</li>
+        </ol>
+        <div class="note"><b>正式版 Firefox：</b>必须先在 <a href="https://addons.mozilla.org/developers/" target="_blank" rel="noopener">addons.mozilla.org</a> 上传 <code>.zip</code> 完成签名，通过审核后从商店安装。</div>
+      </div>
+
+      <!-- SAFARI -->
+      <div class="tab-panel" id="panel-safari">
+        <div class="meta-row">
+          <div class="meta"><span class="k">构建命令</span><span class="v">npm run build:safari</span></div>
+          <div class="meta"><span class="k">产物目录</span><span class="v">.output/safari-mv3/</span></div>
+          <div class="meta"><span class="k">最低版本</span><span class="v">Safari 16+ / macOS</span></div>
+        </div>
+        <div class="note"><b>需要 Xcode。</b>Safari App Extension 必须打包进一个 Xcode 工程后才能安装，WXT 只产出源码。</div>
+        <div class="code"><button class="copy">复制</button><span class="cmt">$ </span>npm run build:safari
+<span class="cmt"># → .output\safari-mv3\</span></div>
+        <ol class="steps">
+          <li>打开 Xcode，新建一个 <b>Safari Web Extension</b> target，包裹 <code>.output/safari-mv3/</code></li>
+          <li>Build &amp; Run，在模拟器或本机 Safari 中安装</li>
+          <li>在 <b>Safari → 设置 → 扩展</b> 中勾选启用</li>
+          <li>在 <b>开发 → [你的扩展]</b> 中允许运行</li>
+        </ol>
+        <div class="note"><b>Safari 限制：</b>不支持代理 API；下载引擎与其它浏览器共用同一隐藏页面 <code>download-runner</code>。</div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    Sniffls — detect &amp; download m3u8 / HLS as MP4 ·
+    <a href="../README.md">README</a> ·
+    <a href="../README.zh-CN.md">简体中文</a> ·
+    MIT License
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.code').forEach(function (block) {
+    var btn = block.querySelector('.copy');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var text = block.innerText.replace(/^复制\s*/, '').trim();
+      navigator.clipboard.writeText(text).then(function () {
+        btn.classList.add('ok'); btn.textContent = '已复制 ✓';
+        setTimeout(function () { btn.classList.remove('ok'); btn.textContent = '复制'; }, 1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>

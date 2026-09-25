@@ -37,6 +37,15 @@ const config: Config = {
         card: '0 1px 2px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.06)',
         pop: '0 8px 24px rgb(0 0 0 / 0.12)',
       },
+      keyframes: {
+        halo: {
+          '0%, 100%': { transform: 'scale(1)', opacity: '0.6' },
+          '50%': { transform: 'scale(1.45)', opacity: '0' },
+        },
+      },
+      animation: {
+        halo: 'halo 2.2s ease-out infinite',
+      },
     },
   },
   plugins: [],

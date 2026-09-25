@@ -13,6 +13,8 @@ import { TsTransmuxer } from './transmuxer';
 import { assembleMp4, assembleTs, extFor } from './blobAssembler';
 import { playlistLooksFmp4, isMpegTs, isIsoBmff } from './containerDetect';
 import { mergeFmp4Tracks, type Fmp4TrackBytes } from './fmp4Merge';
+import { getResumeState, saveResumeState, clearResumeState } from '../state/resumeStore';
+import { getSettings } from '../state/settingsStore';
 import { ExtensionError } from '../errors';
 import log from '../log';
 import type {
@@ -36,6 +38,8 @@ interface ResolvedTracks {
 
 export class DownloadEngine {
   private aborted = false;
+  private paused = false;
+  private pools = new Set<import('./segmentPool').SegmentPool>();
   private transmuxer: TsTransmuxer | null = null;
   private mp4Failed = false;
   /** Raw decrypted segment bytes (TS path fallback). */
@@ -78,6 +82,42 @@ export class DownloadEngine {
       const videoResolver = await this.buildResolver(video);
       const audioResolver = audio ? await this.buildResolver(audio) : null;
 
+      // Resume: for finished (VOD) playlists, look up which segments were
+      // already fetched in a previous attempt of this media playlist.
+      let resumeSettings;
+      try {
+        resumeSettings = await getSettings();
+      } catch {
+        resumeSettings = null;
+      }
+      let skipIndices: Set<number> | undefined;
+      let onSegmentDone: ((seq: number) => void) | undefined;
+      // Resume keys off the requested URL; segment sequences are per-playlist.
+      const resumeUrl = job.variantUrl || job.url;
+      const resumable = resumeSettings?.resumeEnabled !== false && video.endList;
+      if (resumable && !audio?.segments.length) {
+        const doneSet = await getResumeState(resumeUrl);
+        if (doneSet.size > 0 && doneSet.size < video.segments.length) {
+          log.info('engine: resuming — skipping fetched segments', {
+            done: doneSet.size,
+            total: video.segments.length,
+          });
+          skipIndices = doneSet;
+        } else if (doneSet.size >= video.segments.length && video.segments.length > 0) {
+          // Prior run reached 100% but never finalized — refetch from scratch
+          // is safest (assembly state was lost with the host page).
+          await clearResumeState(resumeUrl);
+        }
+      }
+      // Persist progress checkpoints as segments complete (VOD only).
+      if (resumable && !audio?.segments.length) {
+        const fetched = new Set<number>(skipIndices ?? []);
+        onSegmentDone = (seq: number) => {
+          fetched.add(seq);
+          void saveResumeState(resumeUrl, fetched).catch(() => {});
+        };
+      }
+
       const wantMp4 = job.format !== 'ts';
 
       // CMAF / fMP4 path (Twitter amplify, many modern CDNs).
@@ -87,7 +127,15 @@ export class DownloadEngine {
       }
 
       // Classic MPEG-TS path (may still discover fMP4 on first segment).
-      await this.runTsPath(video, audio, wantMp4, videoResolver, audioResolver);
+      await this.runTsPath(
+        video,
+        audio,
+        wantMp4,
+        videoResolver,
+        audioResolver,
+        skipIndices,
+        onSegmentDone,
+      );
     } catch (e) {
       if (e instanceof ExtensionError) this.cb.onError(e);
       else this.cb.onError(new ExtensionError('UNKNOWN', (e as Error)?.message, e));
@@ -179,20 +227,7 @@ export class DownloadEngine {
     }
 
     const media: Uint8Array[] = [];
-    const pool = new SegmentPool({
-      concurrency: this.job.concurrency,
-      resolveDecryptor: resolver ?? undefined,
-      onProgress: (done, _total, bytes) => {
-        this.emit({
-          status: 'fetching',
-          done,
-          total: playlist.segments.length,
-          bytesLoaded: this.bytesLoaded + bytes,
-        });
-      },
-    });
-
-    for await (const res of pool.run(playlist.segments)) {
+    for await (const res of this.poolFor(playlist, resolver)) {
       if (this.aborted) throw new ExtensionError('CANCELED');
       media.push(res.bytes);
     }
@@ -219,6 +254,58 @@ export class DownloadEngine {
     return bytes;
   }
 
+  /** Run a segment pool over a playlist, honoring retries + resume skips. */
+  private async *poolFor(
+    playlist: ParsedPlaylist,
+    resolver?: KeyResolver | null,
+    skipIndices?: Set<number>,
+    onSegmentDone?: (seq: number) => void,
+  ): AsyncIterable<import('./segmentPool').SegmentResult> {
+    let retries = 3;
+    try {
+      const s = await getSettings();
+      retries = s.segmentRetries;
+    } catch {
+      /* default */
+    }
+    const pool = new SegmentPool({
+      concurrency: this.job.concurrency,
+      resolveDecryptor: resolver ? (seg) => resolver(seg) : undefined,
+      retries,
+      skipIndices,
+      onSegmentDone,
+      onProgress: (done, _total, bytes) => {
+        this.emit({
+          status: this.paused ? 'paused' : 'fetching',
+          done,
+          total: playlist.segments.length,
+          bytesLoaded: bytes,
+        });
+      },
+    });
+    this.pools.add(pool);
+    try {
+      yield* pool.run(playlist.segments);
+    } finally {
+      this.pools.delete(pool);
+    }
+  }
+
+  /** Pause all running segment pools (in-flight requests finish).
+   * No progress emit here — the SW broadcasts 'paused' the instant the user
+   * clicks, and a host-side emit would race it (and previously reset the
+   * counters with done:0/total:0). */
+  pause(): void {
+    this.paused = true;
+    for (const p of this.pools) p.pause();
+  }
+
+  /** Resume previously paused segment pools. */
+  resume(): void {
+    this.paused = false;
+    for (const p of this.pools) p.resume();
+  }
+
   /** Classic TS segments → mux.js → MP4 (or raw .ts fallback). */
   private async runTsPath(
     playlist: ParsedPlaylist,
@@ -226,6 +313,8 @@ export class DownloadEngine {
     wantMp4: boolean,
     videoResolver: KeyResolver | null,
     audioResolver: KeyResolver | null,
+    skipIndices?: Set<number>,
+    onSegmentDone?: (seq: number) => void,
   ): Promise<void> {
     const { segments } = playlist;
 
@@ -244,23 +333,10 @@ export class DownloadEngine {
       }
     }
 
-    const pool = new SegmentPool({
-      concurrency: this.job.concurrency,
-      resolveDecryptor: videoResolver ?? undefined,
-      onProgress: (done, _total, bytes) => {
-        this.emit({
-          status: this.transmuxer && !this.mp4Failed ? 'transmuxing' : 'fetching',
-          done,
-          total: segments.length,
-          bytesLoaded: bytes,
-        });
-      },
-    });
-
-    for await (const res of pool.run(segments)) {
+    for await (const res of this.poolFor(playlist, videoResolver, skipIndices, onSegmentDone)) {
       if (this.aborted) throw new ExtensionError('CANCELED');
       const seg = res.bytes;
-      this.tsBuffer.push(seg);
+      this.tsBuffer.push(res.bytes);
 
       // Skip mux.js when payload is already ISO BMFF (mis-labeled playlist).
       if (this.tsBuffer.length === 1 && isIsoBmff(seg) && !isMpegTs(seg)) {
@@ -342,6 +418,10 @@ export class DownloadEngine {
     this.tsBuffer = [];
     this.dataChunks = [];
     this.initSeg = null;
+
+    // Download finalized — clear any resume checkpoint for this playlist.
+    const mediaUrl = this.job.variantUrl || this.job.url;
+    void clearResumeState(mediaUrl).catch(() => {});
 
     const filename = `${this.job.baseFilename}.${extFor(format)}`;
     this.emit({

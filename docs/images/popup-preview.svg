@@ -6,7 +6,7 @@
   <rect x="0" y="40" width="420" height="16" fill="#ffffff"/>
   <text x="20" y="34" font-size="15" font-weight="700" fill="#0f172a">Sniffls</text>
   <text x="118" y="34" font-size="11" fill="#64748b">example.com</text>
-  <!-- header icons -->
+  <!-- header icons: refresh, manager, settings -->
   <g fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round">
     <path d="M336 24 a10 10 0 1 0 10 -10"/>
     <path d="M346 24 l-3 -3 M346 24 l3 -3"/>
@@ -22,64 +22,23 @@
   </g>
   <line x1="0" y1="56" x2="420" y2="56" stroke="#e2e8f0"/>
 
-  <!-- Stream item 1 -->
-  <rect x="12" y="68" width="396" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
-  <!-- badges -->
-  <rect x="24" y="80" width="38" height="18" rx="5" fill="#eef2ff"/>
-  <text x="43" y="93" text-anchor="middle" font-size="9" font-weight="700" fill="#4f46e5">NET</text>
-  <rect x="68" y="80" width="48" height="18" rx="5" fill="#dcfce7"/>
-  <text x="92" y="93" text-anchor="middle" font-size="9" font-weight="700" fill="#16a34a">1080p</text>
-  <rect x="122" y="80" width="40" height="18" rx="5" fill="#dcfce7"/>
-  <text x="142" y="93" text-anchor="middle" font-size="9" font-weight="700" fill="#16a34a">MP4</text>
-  <!-- url -->
-  <text x="24" y="120" font-size="10" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">https://cdn.example.com/v/clip-0/master.m3u8</text>
-  <!-- quality chips -->
-  <g font-size="9" font-weight="600">
-    <rect x="24" y="132" width="38" height="18" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
-    <text x="43" y="145" text-anchor="middle" fill="#64748b">360p</text>
-    <rect x="66" y="132" width="38" height="18" rx="5" fill="#ffffff" stroke="#e2e8f0"/>
-    <text x="85" y="145" text-anchor="middle" fill="#64748b">720p</text>
-    <rect x="108" y="132" width="42" height="18" rx="5" fill="#eef2ff" stroke="#4f46e5"/>
-    <text x="129" y="145" text-anchor="middle" fill="#4f46e5">1080p</text>
+  <!-- Empty state: search icon with breathing halo -->
+  <circle cx="210" cy="130" r="46" fill="#eef2ff" opacity="0.55"/>
+  <circle cx="210" cy="130" r="30" fill="#eef2ff" opacity="0.8"/>
+  <circle cx="210" cy="130" r="24" fill="#f8fafc" stroke="#e2e8f0"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round">
+    <circle cx="205" cy="125" r="9" fill="none" stroke="#94a3b8"/>
+    <path d="M212 132 l8 8" stroke="#94a3b8"/>
   </g>
-  <!-- download button -->
-  <rect x="300" y="100" width="96" height="34" rx="8" fill="#4f46e5"/>
-  <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M318 110 v8 M318 118 l-4 -4 M318 118 l4 -4"/>
-    <path d="M312 124 h12"/>
-  </g>
-  <text x="332" y="122" font-size="12" font-weight="600" fill="#ffffff">Download</text>
-
-  <!-- Stream item 2 (downloading) -->
-  <rect x="12" y="194" width="396" height="98" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
-  <rect x="24" y="206" width="38" height="18" rx="5" fill="#f1f5f9"/>
-  <text x="43" y="219" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">DOM</text>
-  <rect x="68" y="206" width="42" height="18" rx="5" fill="#dcfce7"/>
-  <text x="89" y="219" text-anchor="middle" font-size="9" font-weight="700" fill="#16a34a">720p</text>
-  <text x="24" y="246" font-size="10" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">https://cdn.example.com/v/clip-1/index.m3u8</text>
-  <!-- progress -->
-  <text x="24" y="268" font-size="11" font-weight="600" fill="#0f172a">Downloading… 64%</text>
-  <rect x="24" y="274" width="260" height="6" rx="3" fill="#f1f5f9"/>
-  <rect x="24" y="274" width="166" height="6" rx="3" fill="#4f46e5"/>
-  <rect x="300" y="262" width="96" height="22" rx="7" fill="#ffffff" stroke="#e2e8f0"/>
-  <text x="348" y="277" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">✕</text>
-
-  <!-- Stream item 3 (done) -->
-  <rect x="12" y="300" width="396" height="74" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
-  <rect x="24" y="312" width="38" height="18" rx="5" fill="#eef2ff"/>
-  <text x="43" y="325" text-anchor="middle" font-size="9" font-weight="700" fill="#4f46e5">NET</text>
-  <rect x="68" y="312" width="42" height="18" rx="5" fill="#dcfce7"/>
-  <text x="89" y="325" text-anchor="middle" font-size="9" font-weight="700" fill="#16a34a">1080p</text>
-  <rect x="116" y="312" width="40" height="18" rx="5" fill="#dcfce7"/>
-  <text x="136" y="325" text-anchor="middle" font-size="9" font-weight="700" fill="#16a34a">MP4</text>
-  <text x="24" y="352" font-size="10" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">https://cdn.example.com/v/clip-2/master.m3u8</text>
-  <rect x="300" y="332" width="96" height="22" rx="7" fill="#dcfce7"/>
-  <text x="348" y="347" text-anchor="middle" font-size="10" font-weight="700" fill="#16a34a">✓ done</text>
+  <text x="210" y="196" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">No m3u8 detected yet</text>
+  <text x="210" y="216" text-anchor="middle" font-size="10" fill="#64748b">Open a page with HLS video, or click refresh to scan the page.</text>
+  <rect x="158" y="230" width="104" height="30" rx="8" fill="#4f46e5"/>
+  <text x="210" y="249" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">⟳ Scan page</text>
 
   <!-- Footer -->
   <line x1="0" y1="390" x2="420" y2="390" stroke="#e2e8f0"/>
-  <text x="20" y="412" font-size="11" fill="#64748b">Detected: 3 · </text>
-  <text x="96" y="412" font-size="11" fill="#4f46e5" text-decoration="underline">open manager</text>
+  <text x="20" y="412" font-size="11" fill="#64748b">Detected: 0 · </text>
+  <text x="90" y="412" font-size="11" fill="#4f46e5" text-decoration="underline">open manager</text>
   <text x="20" y="436" font-size="9" fill="#94a3b8">Auto-detect on · DOM scan on</text>
 
   <!-- dark variant label -->
