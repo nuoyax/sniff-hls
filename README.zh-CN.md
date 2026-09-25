@@ -28,10 +28,10 @@
 
 ## ✨ 功能特性
 
-- **自动检测**：通过 `webRequest` 网络嗅探 + 按需 DOM 扫描，识别任意页面的 m3u8——包括把真实播放列表藏在 `?url=` 查询参数里的包装页。
+- **自动检测**：通过 `webRequest` 网络嗅探 + 按需 DOM 扫描，识别任意页面的 m3u8——包括把真实播放列表藏在 `?url=` 查询参数里的包装页，以及用响应 `Content-Type` 匹配的无扩展名 CDN 端点。
 - **下载为 MP4**：经典 `.ts` HLS 用 `mux.js` 转封装为 fMP4（不重编码）。**CMAF/fMP4**（`#EXT-X-MAP`）拼接 init + 分片；分离音轨（`#EXT-X-MEDIA` + `AUDIO=`）用 [mediabunny](https://mediabunny.dev/) remux。经典 TS 在不支持的加密或异常编码时自动降级为 `.ts`。
 - **X（Twitter）视频**：支持 `video.twimg.com` 的 amplify HLS（音视频分离的 CMAF），下载为带音频的单个可播 MP4。打开含视频的帖子，等角标出现后在弹窗下载（可选手动选清晰度）。若所在网络无法访问 CDN，请在设置里启用代理，或使用系统/浏览器代理。
-- **AES-128 解密**：基于 WebCrypto（显式 IV 或按 RFC 8216 序号派生 IV）。
+- **AES-128 解密**：基于 WebCrypto（显式 IV 或按 RFC 8216 序号派生 IV），支持播放列表中途**密钥轮换**与加密的 `#EXT-X-MAP` init 分片。
 - **清晰度选择**：列出 master playlist 的所有档位；默认最高码率。
 - **并发分片下载**：带重试 + 指数退避（可配 1–20）。
 - **下载管理器**：实时进度、历史记录、重试、清空。

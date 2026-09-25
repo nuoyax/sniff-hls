@@ -6,8 +6,9 @@
 // - CMAF/fMP4 HLS (#EXT-X-MAP): concat init + media (no mux.js)
 // - Demuxed audio (#EXT-X-MEDIA + STREAM-INF AUDIO=): download + remux via mp4box
 import { fetchText, fetchBytes } from './fetcher';
-import { parsePlaylist, pickBestVariant, pickAudioRendition } from './m3u8Parser';
+import { parsePlaylist, pickVariant, pickAudioRendition } from './m3u8Parser';
 import { SegmentPool, makeDecryptor } from './segmentPool';
+import { createKeyResolver, type KeyResolver } from './keyRegistry';
 import { TsTransmuxer } from './transmuxer';
 import { assembleMp4, assembleTs, extFor } from './blobAssembler';
 import { playlistLooksFmp4, isMpegTs, isIsoBmff } from './containerDetect';
@@ -67,29 +68,44 @@ export class DownloadEngine {
         videoSegments: video.segments.length,
         audioSegments: audio?.segments.length ?? 0,
         keyMethod: video.key?.method,
+        encryptedSegments: video.segments.filter((s) => s.key && s.key.method !== 'NONE').length,
         fmp4Hint: playlistLooksFmp4(video),
         endList: video.endList,
       });
 
-      const decryptor = await makeDecryptor(video.key);
-      const canDecrypt = !video.key || video.key.method === 'NONE' || decryptor;
-      if (!canDecrypt) {
-        throw new ExtensionError('DECRYPT', `Unsupported encryption: ${video.key?.method}`);
-      }
+      // Import every key up front: a rotation to an unsupported cipher must
+      // fail before any segment is downloaded, not halfway through.
+      const videoResolver = await this.buildResolver(video);
+      const audioResolver = audio ? await this.buildResolver(audio) : null;
 
       const wantMp4 = job.format !== 'ts';
 
       // CMAF / fMP4 path (Twitter amplify, many modern CDNs).
       if (playlistLooksFmp4(video)) {
-        await this.runFmp4Path(video, audio, wantMp4);
+        await this.runFmp4Path(video, audio, wantMp4, videoResolver, audioResolver);
         return;
       }
 
       // Classic MPEG-TS path (may still discover fMP4 on first segment).
-      await this.runTsPath(video, audio, wantMp4, decryptor);
+      await this.runTsPath(video, audio, wantMp4, videoResolver, audioResolver);
     } catch (e) {
       if (e instanceof ExtensionError) this.cb.onError(e);
       else this.cb.onError(new ExtensionError('UNKNOWN', (e as Error)?.message, e));
+    }
+  }
+
+  /**
+   * Resolve a decryptor per segment. Returns null when the playlist is
+   * unencrypted; throws (as DECRYPT) when a key cannot be imported.
+   */
+  private async buildResolver(playlist: ParsedPlaylist): Promise<KeyResolver | null> {
+    const encrypted = playlist.segments.some((s) => s.key && s.key.method !== 'NONE');
+    if (!encrypted) return null;
+    const fallback = await makeDecryptor(playlist.key);
+    try {
+      return await createKeyResolver(playlist.segments, fallback);
+    } catch (e) {
+      throw new ExtensionError('DECRYPT', (e as Error)?.message ?? 'key import failed', e);
     }
   }
 
@@ -98,14 +114,16 @@ export class DownloadEngine {
     video: ParsedPlaylist,
     audio: ParsedPlaylist | undefined,
     wantMp4: boolean,
+    videoResolver: KeyResolver | null,
+    audioResolver: KeyResolver | null,
   ): Promise<void> {
     const totalSegs = video.segments.length + (audio?.segments.length ?? 0);
-    const videoTrack = await this.downloadFmp4Track(video);
+    const videoTrack = await this.downloadFmp4Track(video, videoResolver);
     if (this.aborted) throw new ExtensionError('CANCELED');
 
     let audioTrack: Fmp4TrackBytes | undefined;
     if (audio?.segments.length) {
-      audioTrack = await this.downloadFmp4Track(audio);
+      audioTrack = await this.downloadFmp4Track(audio, audioResolver);
       if (this.aborted) throw new ExtensionError('CANCELED');
     }
 
@@ -149,8 +167,10 @@ export class DownloadEngine {
     this.cb.onComplete({ blob, format, filename });
   }
 
-  private async downloadFmp4Track(playlist: ParsedPlaylist): Promise<Fmp4TrackBytes> {
-    const decryptor = await makeDecryptor(playlist.key);
+  private async downloadFmp4Track(
+    playlist: ParsedPlaylist,
+    resolver: KeyResolver | null,
+  ): Promise<Fmp4TrackBytes> {
     let init: Uint8Array | null = null;
 
     if (playlist.initSegment) {
@@ -161,7 +181,7 @@ export class DownloadEngine {
     const media: Uint8Array[] = [];
     const pool = new SegmentPool({
       concurrency: this.job.concurrency,
-      decryptor: decryptor ?? undefined,
+      resolveDecryptor: resolver ?? undefined,
       onProgress: (done, _total, bytes) => {
         this.emit({
           status: 'fetching',
@@ -181,12 +201,22 @@ export class DownloadEngine {
     return { init, media };
   }
 
+  /** Fetch #EXT-X-MAP, decrypting when the init segment is itself encrypted. */
   private async fetchInit(init: InitSegment): Promise<Uint8Array> {
-    return fetchBytes(init.uri, {
+    const bytes = await fetchBytes(init.uri, {
       byterange: init.byterange,
       timeoutMs: 60_000,
       retries: 3,
     });
+    if (init.key && init.key.method !== 'NONE') {
+      const decryptor = await makeDecryptor(init.key);
+      if (!decryptor) {
+        throw new ExtensionError('DECRYPT', `Unsupported init segment key: ${init.key.method}`);
+      }
+      // Init segments are keyed by their own sequence (0 here) or an explicit IV.
+      return decryptor.decrypt(bytes, 0);
+    }
+    return bytes;
   }
 
   /** Classic TS segments → mux.js → MP4 (or raw .ts fallback). */
@@ -194,7 +224,8 @@ export class DownloadEngine {
     playlist: ParsedPlaylist,
     audio: ParsedPlaylist | undefined,
     wantMp4: boolean,
-    decryptor: Awaited<ReturnType<typeof makeDecryptor>>,
+    videoResolver: KeyResolver | null,
+    audioResolver: KeyResolver | null,
   ): Promise<void> {
     const { segments } = playlist;
 
@@ -215,7 +246,7 @@ export class DownloadEngine {
 
     const pool = new SegmentPool({
       concurrency: this.job.concurrency,
-      decryptor: decryptor ?? undefined,
+      resolveDecryptor: videoResolver ?? undefined,
       onProgress: (done, _total, bytes) => {
         this.emit({
           status: this.transmuxer && !this.mp4Failed ? 'transmuxing' : 'fetching',
@@ -266,7 +297,7 @@ export class DownloadEngine {
       log.info('engine: assembling fMP4 segments without playlist MAP');
       if (audio?.segments.length) {
         try {
-          const audioTrack = await this.downloadFmp4Track(audio);
+          const audioTrack = await this.downloadFmp4Track(audio, audioResolver);
           const merged = await mergeFmp4Tracks(
             { init: null, media: this.tsBuffer },
             audioTrack,
@@ -335,7 +366,7 @@ export class DownloadEngine {
 
     const chosen =
       (variantUrl ? pl.variants.find((v) => v.url === variantUrl) : undefined) ??
-      pickBestVariant(pl.variants);
+      pickVariant(pl.variants, this.job.defaultQuality ?? 'highest');
     if (!chosen) throw new ExtensionError('PARSE', 'Master playlist has no variants');
 
     // If UI passed a variant URL that isn't in the list, still fetch it as video media.

@@ -32,6 +32,9 @@ function handleHostCommand(msg: any): void {
     void runJob(msg.job as DownloadJob);
   } else if (msg.kind === 'CANCEL' && msg.jobId) {
     engines.get(msg.jobId)?.cancel();
+  } else if (msg.kind === 'LIST_JOBS') {
+    // Lets a restarted SW drop persisted jobs this host is no longer running.
+    postToSw({ kind: 'JOBS', ids: Array.from(engines.keys()) });
   }
 }
 

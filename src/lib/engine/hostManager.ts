@@ -163,6 +163,19 @@ export function getRunnerTabId(): number | null {
   return runnerTabId;
 }
 
+/**
+ * Ask the engine host to stop a running job. Fire-and-forget: the host may be
+ * gone (SW restarted, tab closed), in which case there is nothing left to stop.
+ */
+export async function cancelJobInHost(jobId: string): Promise<void> {
+  try {
+    if (!hostPort) return;
+    hostPort.postMessage({ __host: true, kind: 'CANCEL', jobId });
+  } catch (e) {
+    log.warn('cancel to host failed', e);
+  }
+}
+
 function isNoReceiver(e: unknown): boolean {
   const msg = String((e as Error)?.message || e);
   return /Receiving end does not exist|Could not establish connection|host ready timeout|no host port/i.test(msg);

@@ -8,17 +8,16 @@ import { bapi } from '@/lib/platform/browser';
 import { capabilities } from '@/lib/platform/featureDetect';
 import { storage } from '@/lib/platform/browser';
 import { registerMessageHandler, onProgressPort, type Request, type Response } from '@/lib/platform/messaging';
-import { isM3u8Url, isHlsContentType, normalizeUrl, deriveBaseFilename, extractM3u8Url } from '@/lib/detection/urlNormalizer';
+import { isM3u8Url, isHlsContentType, deriveBaseFilename, extractM3u8Url } from '@/lib/detection/urlNormalizer';
 import { probeVariants } from '@/lib/detection/masterQualityProbe';
 import { getDetections, addDetection, clearTab } from '@/lib/state/sessionStore';
 import { getSettings, setSettings, subscribeSettings, DEFAULT_SETTINGS } from '@/lib/state/settingsStore';
-import { addHistory, updateHistory, listHistory } from '@/lib/state/historyStore';
+import { addHistory, updateHistory } from '@/lib/state/historyStore';
+import { loadActiveJobs, saveActiveJobs, type PersistedJob } from '@/lib/state/activeJobStore';
 import { setBadge, clearBadge, type BadgeState } from '@/lib/detection/badge';
-import { ensureHost, markHostReady, sendToHost, setupHostPort } from '@/lib/engine/hostManager';
+import { ensureHost, markHostReady, sendToHost, setupHostPort, cancelJobInHost } from '@/lib/engine/hostManager';
 import { applyProxy, clearProxy } from '@/lib/platform/proxyShim';
 import { sanitizeFilename } from '@/lib/platform/downloadsShim';
-import { DownloadEngine } from '@/lib/engine/engine';
-import { ExtensionError } from '@/lib/errors';
 import { setDebug } from '@/lib/log';
 import log from '@/lib/log';
 import { genId } from '@/lib/engine/fetcher';
@@ -44,7 +43,9 @@ export default defineBackground(() => {
   if (capabilities.webRequest) {
     const filter = { urls: ['<all_urls>'] };
     bapi.webRequest.onBeforeRequest.addListener(onWebRequest, filter);
-    bapi.webRequest.onResponseStarted.addListener(onResponseStarted, filter);
+    bapi.webRequest.onResponseStarted.addListener(onResponseStarted, filter, [
+      'responseHeaders',
+    ]);
   }
 
   bapi.tabs.onRemoved.addListener((tabId: number) => {
@@ -93,8 +94,78 @@ async function bootstrap() {
   } catch (e) {
     log.warn('bootstrap settings failed', e);
   }
+  await rehydrateActiveJobs();
   // Pre-warm the host so the first download is snappy.
   ensureHost().catch(() => {});
+}
+
+/**
+ * Re-adopt downloads that survived an SW recycle.
+ *
+ * The engine host keeps running without us, but our in-memory map (and with it
+ * GET_ACTIVE + cancel) is gone. Mirror the persisted records back into memory
+ * and ask the host which jobs it is actually still running, so stale entries
+ * don't linger as phantom "active" downloads forever.
+ */
+async function rehydrateActiveJobs() {
+  try {
+    const persisted = await loadActiveJobs();
+    if (!persisted.length) return;
+    for (const p of persisted) {
+      activeJobs.set(p.job.id, {
+        jobId: p.job.id,
+        url: p.job.url,
+        baseFilename: p.job.baseFilename,
+        format: p.job.format,
+        status: p.status,
+        done: p.done,
+        total: p.total,
+        bytesLoaded: p.bytesLoaded,
+        startedAt: p.startedAt,
+        historyId: p.historyId,
+        job: p.job,
+        lastHistoryWrite: Date.now(),
+      });
+    }
+    log.info('rehydrated active jobs after SW restart', persisted.length);
+
+    // Expect the host's JOBS reply before probing, so a fast reply isn't lost.
+    pendingReconcile = true;
+    const res = (await sendToHost({ __host: true, kind: 'LIST_JOBS' })) as { ok?: boolean };
+    if (!res?.ok) {
+      pendingReconcile = false;
+      dropStaleJobs();
+    }
+  } catch (e) {
+    log.warn('rehydrate active jobs failed', e);
+    activeJobs.clear();
+    void saveActiveJobs([]);
+  }
+}
+
+/** Drop persisted jobs the host is no longer running; keep the live ones. */
+function reconcileWithHost(hostJobIds: string[]) {
+  const live = new Set(hostJobIds);
+  let dropped = 0;
+  for (const [id, j] of activeJobs) {
+    if (!live.has(id)) {
+      activeJobs.delete(id);
+      void updateHistory(j.historyId, { status: 'error', error: 'Interrupted by browser restart' });
+      dropped++;
+    }
+  }
+  pendingReconcile = false;
+  if (dropped) log.info('dropped interrupted jobs', dropped);
+  persistActiveJobs();
+}
+
+/** No host reachable → every persisted job is stale. */
+function dropStaleJobs() {
+  for (const [, j] of activeJobs) {
+    void updateHistory(j.historyId, { status: 'error', error: 'Interrupted by browser restart' });
+  }
+  activeJobs.clear();
+  void saveActiveJobs([]);
 }
 
 // ===================== detection =====================
@@ -104,13 +175,31 @@ function onWebRequest(details: { tabId: number; url: string }) {
   void recordDetection(details.tabId, details.url, 'network');
 }
 
-function onResponseStarted(details: { tabId: number; url: string; statusCode: number }) {
+function onResponseStarted(details: {
+  tabId: number;
+  url: string;
+  statusCode: number;
+  responseHeaders?: { name: string; value?: string }[];
+}) {
   if (details.tabId < 0 || details.statusCode >= 400) return;
-  // Content-Type-based detection handled elsewhere; URL match is primary here.
   if (isM3u8Url(details.url)) return; // already handled by onBeforeRequest
+
+  // Playlists served from extension-less URLs (CDN endpoints, player proxies)
+  // are invisible to the URL matcher — fall back to the response Content-Type.
+  const contentType = details.responseHeaders?.find(
+    (h) => h.name.toLowerCase() === 'content-type',
+  )?.value;
+  if (isHlsContentType(contentType)) {
+    void recordDetection(details.tabId, details.url, 'network', contentType);
+  }
 }
 
-async function recordDetection(tabId: number, url: string, source: 'network' | 'dom') {
+async function recordDetection(
+  tabId: number,
+  url: string,
+  source: 'network' | 'dom',
+  contentType?: string,
+) {
   const s = await getSettings();
   if (!s.autoDetect && source === 'network') return;
   // Unwrap player proxies like /m3u8/?url=https%3A%2F%2Fcdn%2Findex.m3u8
@@ -122,6 +211,7 @@ async function recordDetection(tabId: number, url: string, source: 'network' | '
     source,
     detectedAt: Date.now(),
     pageUrl,
+    contentType,
   });
   if (added) {
     log.debug('detected', real, real !== url ? `(from ${url})` : '');
@@ -208,7 +298,7 @@ async function handleMessage(req: Request): Promise<Response> {
       return { ok: true };
     }
     case 'GET_ACTIVE': {
-      return { ok: true, data: Object.fromEntries(activeJobs) };
+      return { ok: true, data: Object.fromEntries(Array.from(activeJobs, ([id, j]) => [id, toActiveView(j)])) };
     }
     case 'OPEN_MANAGER': {
       await bapi.tabs.create({ url: bapi.runtime.getURL('download-manager.html') });
@@ -240,11 +330,45 @@ interface ActiveJob {
   total: number;
   bytesLoaded: number;
   startedAt: number;
-  engine?: DownloadEngine;
   historyId: string;
+  /** Full job description — persisted so a recycled SW can still cancel it. */
+  job: DownloadJob;
+  /** Last time history was written for this job (throttles storage writes). */
+  lastHistoryWrite: number;
 }
 
 const activeJobs = new Map<string, ActiveJob>();
+/** History writes are throttled: progress ticks at segment rate. */
+const HISTORY_WRITE_INTERVAL_MS = 5000;
+/** True while we're expecting the host's JOBS reply to a LIST_JOBS probe. */
+let pendingReconcile = false;
+
+function persistActiveJobs(): void {
+  const snapshot: PersistedJob[] = Array.from(activeJobs.values()).map((j) => ({
+    job: j.job,
+    status: j.status,
+    done: j.done,
+    total: j.total,
+    bytesLoaded: j.bytesLoaded,
+    startedAt: j.startedAt,
+    historyId: j.historyId,
+  }));
+  void saveActiveJobs(snapshot);
+}
+
+function toActiveView(j: ActiveJob) {
+  return {
+    jobId: j.jobId,
+    url: j.url,
+    baseFilename: j.baseFilename,
+    format: j.format,
+    status: j.status,
+    done: j.done,
+    total: j.total,
+    bytesLoaded: j.bytesLoaded,
+    startedAt: j.startedAt,
+  };
+}
 
 async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }>): Promise<string> {
   const s = await getSettings();
@@ -264,6 +388,7 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
     variantUrl: req.payload.variantUrl,
     format: req.payload.format === 'auto' ? s.format : req.payload.format,
     concurrency: s.concurrency,
+    defaultQuality: s.defaultQuality,
     baseFilename,
     filename: fullFilename,
     pageUrl: req.payload.pageUrl,
@@ -293,8 +418,11 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
     bytesLoaded: 0,
     startedAt: Date.now(),
     historyId,
+    job,
+    lastHistoryWrite: Date.now(),
   };
   activeJobs.set(jobId, active);
+  persistActiveJobs();
 
   // Fire-and-forget; engine runs in the host.
   void runJobInHost(job, active).catch((e) => {
@@ -307,8 +435,10 @@ async function startDownloadJob(req: Extract<Request, { type: 'START_DOWNLOAD' }
 function cancelJob(jobId: string) {
   const j = activeJobs.get(jobId);
   if (!j) return;
-  j.engine?.cancel();
   j.status = 'canceled';
+  // The engine lives in the host: without this the download keeps running and
+  // eventually writes the file even though the UI already shows "canceled".
+  void cancelJobInHost(jobId);
   void updateHistory(j.historyId, { status: 'canceled' });
   broadcastProgress({
     jobId,
@@ -318,6 +448,8 @@ function cancelJob(jobId: string) {
     bytesLoaded: j.bytesLoaded,
     bytesTotal: 0,
   });
+  activeJobs.delete(jobId);
+  persistActiveJobs();
 }
 
 // ===================== engine host execution =====================
@@ -348,6 +480,8 @@ function handleHostMessage(msg: any) {
   } else if (msg.kind === 'HOST_READY') {
     markHostReady();
     log.info('host ready', msg.host);
+  } else if (msg.kind === 'JOBS' && pendingReconcile) {
+    reconcileWithHost(Array.isArray(msg.ids) ? msg.ids : []);
   }
 }
 
@@ -359,8 +493,15 @@ function onHostProgress(p: DownloadProgress) {
   j.total = p.total;
   j.bytesLoaded = p.bytesLoaded;
   broadcastProgress(p);
-  // Best-effort history status update.
-  void updateHistory(j.historyId, { status: p.status });
+  // Progress ticks arrive per segment; writing storage.local on every one both
+  // thrashes the disk and can lose the final write during SW shutdown. Keep the
+  // in-memory map live and persist to history at most every few seconds.
+  const now = Date.now();
+  if (now - j.lastHistoryWrite >= HISTORY_WRITE_INTERVAL_MS) {
+    j.lastHistoryWrite = now;
+    void updateHistory(j.historyId, { status: p.status });
+    persistActiveJobs();
+  }
 }
 
 async function onHostComplete(jobId: string, result: { sizeBytes: number; filename: string; format: import('@/lib/types').OutputFormat }) {
@@ -389,15 +530,32 @@ async function onHostComplete(jobId: string, result: { sizeBytes: number; filena
   }
   broadcastProgress({ jobId, status: 'complete', done: j.done, total: j.total, bytesLoaded: result.sizeBytes, bytesTotal: result.sizeBytes, filename: result.filename, outputFormat: result.format });
   activeJobs.delete(jobId);
+  persistActiveJobs();
 }
 
 async function onHostError(jobId: string, error: { code: string; message: string }) {
   const j = activeJobs.get(jobId);
   if (!j) return;
+  // An engine abort is a cancellation, not a failure — don't paint it red.
+  if (error.code === 'CANCELED') {
+    await updateHistory(j.historyId, { status: 'canceled' });
+    broadcastProgress({
+      jobId,
+      status: 'canceled',
+      done: j.done,
+      total: j.total,
+      bytesLoaded: j.bytesLoaded,
+      bytesTotal: 0,
+    });
+    activeJobs.delete(jobId);
+    persistActiveJobs();
+    return;
+  }
   j.status = 'error';
   await updateHistory(j.historyId, { status: 'error', error: error.message });
   broadcastProgress({ jobId, status: 'error', done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0, error: error.message });
   activeJobs.delete(jobId);
+  persistActiveJobs();
 }
 
 // ===================== progress fan-out (SW → UI ports) =====================

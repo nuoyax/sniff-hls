@@ -62,6 +62,11 @@ export interface Segment {
   discontinuity?: boolean;
   /** Title from EXTINF if present. */
   title?: string;
+  /**
+   * Key in effect for this segment (HLS allows key rotation mid-playlist).
+   * Undefined means the playlist never declared #EXT-X-KEY.
+   */
+  key?: KeyInfo;
 }
 
 /** Encryption info from #EXT-X-KEY. */
@@ -77,6 +82,8 @@ export interface KeyInfo {
 export interface InitSegment {
   uri: string;
   byterange?: { offset: number; length: number };
+  /** Key active when the MAP was declared (encrypted init segments). */
+  key?: KeyInfo;
 }
 
 /** Parsed media/master playlist. */
@@ -131,6 +138,8 @@ export interface DownloadJob {
   concurrency: number;
   /** Suggested filename without extension. */
   baseFilename: string;
+  /** Quality preference when a master playlist offers several renditions. */
+  defaultQuality?: 'highest' | 'lowest';
   /** Full relative path for chrome.downloads (may include subfolder + ext). */
   filename?: string;
   /** Originating tab. */

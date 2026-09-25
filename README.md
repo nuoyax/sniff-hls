@@ -28,10 +28,10 @@
 
 ## ✨ Features
 
-- **Auto-detect** m3u8 on every page via network sniffing (`webRequest`) + on-demand DOM scan — including wrapper URLs that bury the real playlist in a `?url=` query.
+- **Auto-detect** m3u8 on every page via network sniffing (`webRequest`) + on-demand DOM scan — including wrapper URLs that bury the real playlist in a `?url=` query, and extension-less CDN endpoints matched by response `Content-Type`.
 - **Download as MP4** — transmuxes classic `.ts` HLS to fMP4 with `mux.js` (no re-encode). **CMAF/fMP4** playlists (`#EXT-X-MAP`) concat init + media; demuxed audio (`#EXT-X-MEDIA` + `AUDIO=`) is remuxed with [mediabunny](https://mediabunny.dev/). Automatic `.ts` fallback for classic TS when an unsupported cipher or unusual codec is used.
 - **X (Twitter) videos** — amplify HLS on `video.twimg.com` (separate video/audio CMAF playlists) downloads as a single playable MP4 with audio. Open a post that plays video, wait for the badge, then download from the popup (pick quality if offered). If the CDN is blocked in your region, enable a proxy in Options or use the system/browser proxy.
-- **AES-128 decryption** via WebCrypto (explicit IV or sequence-derived, per RFC 8216).
+- **AES-128 decryption** via WebCrypto (explicit IV or sequence-derived, per RFC 8216), including **key rotation** mid-playlist and encrypted `#EXT-X-MAP` init segments.
 - **Quality picker** — lists every rendition from a master playlist; defaults to highest bandwidth.
 - **Concurrent segment fetcher** with retry + exponential backoff (configurable 1–20).
 - **Download manager** with live progress, history, retry, and clear.
@@ -257,8 +257,8 @@ src/
 │  └─ content.ts           # on-demand DOM scanner
 ├─ lib/
 │  ├─ detection/           # webRequestObserver, urlNormalizer, qualityProbe, badge
-│  ├─ state/               # sessionStore, settingsStore, historyStore
-│  ├─ engine/              # engine, m3u8Parser, segmentPool, aesDecryptor,
+│  ├─ state/               # sessionStore, settingsStore, historyStore, activeJobStore
+│  ├─ engine/              # engine, m3u8Parser, segmentPool, keyRegistry, aesDecryptor,
 │  │                       # transmuxer, blobAssembler, fmp4Merge (mediabunny),
 │  │                       # containerDetect, hostManager, hostProtocol, hostRuntime
 │  ├─ platform/            # browser shim, featureDetect, downloadsShim, proxyShim, messaging
@@ -274,7 +274,11 @@ tests/                 # engine + parser unit tests
 
 Engine internals are unit-tested with Vitest:
 - `tests/m3u8Parser.test.ts` — master/media playlists, AES-128 keys, byteranges, init segments, demuxed AUDIO groups.
+- `tests/playlistKeys.test.ts` — mid-playlist key rotation, encrypted init segments, implicit byte-range offsets, quality preference.
+- `tests/keyRegistry.test.ts` — one decryptor per distinct key, IV-aware key identity, early failure on unsupported ciphers.
+- `tests/segmentPool.test.ts` — per-segment decryption, in-order emission, error propagation.
 - `tests/urlNormalizer.test.ts` — m3u8 detection, wrapper `?url=` unwrap, URL normalization, filename derivation.
+- `tests/hlsContentType.test.ts` — Content-Type-matched playlists on extension-less URLs.
 - `tests/containerDetect.test.ts` — MPEG-TS vs fMP4/CMAF detection.
 - `tests/aesDecryptor.test.ts` — IV derivation, decryptor passthrough/error paths.
 

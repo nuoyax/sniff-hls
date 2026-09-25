@@ -86,6 +86,7 @@ export function parseByterange(val: string): { offset: number; length: number } 
   const offsetStr = at >= 0 ? trimmed.slice(at + 1) : '';
   const length = parseInt(lengthStr, 10);
   if (!Number.isFinite(length)) return undefined;
+  // -1 means "not specified"; callers chain it after the previous sub-range.
   const offset = offsetStr ? parseInt(offsetStr, 10) : -1;
   return { length, offset };
 }
@@ -113,7 +114,6 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
   let targetDuration: number | undefined;
   let mediaSequence = 0;
   let endList = false;
-  let key: KeyInfo | undefined;
   let initSegment: InitSegment | undefined;
   const variants: VariantInfo[] = [];
   const segments: Segment[] = [];
@@ -124,6 +124,12 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
   let pendingByterange: { offset: number; length: number } | undefined = undefined;
   let pendingDiscontinuity = false;
   let seq = 0;
+  /** Key in effect for the next media segment (rotated by #EXT-X-KEY). */
+  let currentKey: KeyInfo | undefined;
+  /** First key seen — kept on the playlist for the legacy `key` field. */
+  let firstKey: KeyInfo | undefined;
+  /** End offset of the previous byte range, used for implicit offsets. */
+  let byteRangeEnd = 0;
 
   for (let raw of lines) {
     const line = raw.trim();
@@ -147,16 +153,30 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
       continue;
     }
     if (line.startsWith('#EXT-X-KEY:')) {
-      key = parseKey(line, baseUrl);
+      // Key rotation (RFC 8216 §4.3.2.4): the key applies to every following
+      // media segment until the next #EXT-X-KEY, including METHOD=NONE.
+      currentKey = parseKey(line, baseUrl);
+      firstKey ??= currentKey;
       continue;
     }
     if (line.startsWith('#EXT-X-MAP:')) {
-      initSegment = parseMap(line, baseUrl);
+      const map = parseMap(line, baseUrl);
+      // A MAP after a key declaration is itself encrypted (e.g. encrypted
+      // init segments on some DRM/CDN setups), so record the active key.
+      if (map) {
+        if (currentKey) map.key = currentKey;
+        initSegment = map;
+      }
       continue;
     }
     if (line.startsWith('#EXT-X-BYTERANGE:')) {
       const br = parseByterange(line.slice('#EXT-X-BYTERANGE:'.length));
-      if (br) pendingByterange = { offset: br.offset < 0 ? 0 : br.offset, length: br.length };
+      if (br) {
+        // Missing @offset → continue right after the previous sub-range.
+        const offset = br.offset >= 0 ? br.offset : byteRangeEnd;
+        pendingByterange = { offset, length: br.length };
+        byteRangeEnd = offset + br.length;
+      }
       continue;
     }
     if (line.startsWith('#EXT-X-MEDIA:')) {
@@ -219,6 +239,7 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
         title: pendingInf.title,
         byterange: pendingByterange,
         discontinuity: pendingDiscontinuity,
+        key: currentKey,
       };
       segments.push(seg);
       seq++;
@@ -242,7 +263,7 @@ export function parsePlaylist(text: string, baseUrl: string): ParsedPlaylist {
     variants,
     mediaGroups: hasMediaGroups ? mediaGroups : undefined,
     segments,
-    key,
+    key: firstKey,
     initSegment,
     totalDuration,
   };
@@ -288,6 +309,20 @@ function parseStreamInf(attrsStr: string): Partial<VariantInfo> {
 export function pickBestVariant(variants: VariantInfo[]): VariantInfo | undefined {
   if (!variants.length) return undefined;
   return variants.slice().sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0];
+}
+
+/** Pick the lowest-bandwidth variant. */
+export function pickWorstVariant(variants: VariantInfo[]): VariantInfo | undefined {
+  if (!variants.length) return undefined;
+  return variants.slice().sort((a, b) => (a.bandwidth ?? 0) - (b.bandwidth ?? 0))[0];
+}
+
+/** Pick a variant per the user's quality preference. */
+export function pickVariant(
+  variants: VariantInfo[],
+  preference: 'highest' | 'lowest' = 'highest',
+): VariantInfo | undefined {
+  return preference === 'lowest' ? pickWorstVariant(variants) : pickBestVariant(variants);
 }
 
 /** Pick an audio rendition with a URI from a GROUP-ID list. */

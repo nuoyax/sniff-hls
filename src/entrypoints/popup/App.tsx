@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ProgressRing } from '@/components/Progress';
 import { Settings, RefreshCw, Download as DownloadIcon, ListVideo, Edit3, Check } from 'lucide-react';
 import { deriveBaseFilename, buildDefaultFilename, sanitizeTitleStem, timestampString } from '@/lib/detection/urlNormalizer';
+import { getSettings } from '@/lib/state/settingsStore';
 
 interface ActiveDownload {
   jobId: string;
@@ -22,6 +23,7 @@ export default function App() {
   const [pageUrl, setPageUrl] = useState<string | undefined>();
   const [pageTitle, setPageTitle] = useState<string | undefined>();
   const [autoDetect, setAutoDetect] = useState(true);
+  const [quality, setQuality] = useState<'highest' | 'lowest'>('highest');
   const [active, setActive] = useState<Record<string, ActiveDownload>>({});
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -38,6 +40,16 @@ export default function App() {
         }
         setTabId(tab.id);
         setPageUrl(tab.url);
+        // Mirror the user's detection/quality preferences into the UI.
+        try {
+          const s = await getSettings();
+          if (!cancelled) {
+            setAutoDetect(s.autoDetect);
+            setQuality(s.defaultQuality);
+          }
+        } catch {
+          /* settings unavailable — keep defaults */
+        }
         // Fetch the page title from the SW for a sensible default filename.
         // Timeout: if the service worker never responds, don't spin forever.
         const info = await withTimeout(
@@ -240,6 +252,7 @@ export default function App() {
                 key={d.url}
                 item={d}
                 pageTitle={pageTitle}
+                quality={quality}
                 active={active[d.url]}
                 onDownload={(v, fname) => startDownload(d.url, v, fname)}
                 onCancel={() => active[d.url] && cancel(active[d.url].jobId, d.url)}
@@ -269,18 +282,24 @@ export default function App() {
 function StreamItem({
   item,
   pageTitle,
+  quality,
   active,
   onDownload,
   onCancel,
 }: {
   item: DetectedItem;
   pageTitle?: string;
+  quality: 'highest' | 'lowest';
   active?: ActiveDownload;
   onDownload: (variant?: VariantInfo, filename?: string) => void;
   onCancel: () => void;
 }) {
   const variants = item.variants ?? [];
-  const best = variants.length ? variants[variants.length - 1] : undefined;
+  // The main Download button honours the user's quality preference; the list
+  // below still lets them pick a specific rendition.
+  const preferred =
+    quality === 'lowest' ? variants[0] : variants[variants.length - 1];
+  const best = preferred;
   const isDownloading = active && ['fetching', 'decrypting', 'transmuxing', 'assembling', 'downloading'].includes(active.status);
   const isDone = active?.status === 'complete';
   const isError = active?.status === 'error';

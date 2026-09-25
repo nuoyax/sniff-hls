@@ -14,8 +14,14 @@ export interface PoolOptions {
   concurrency: number;
   /** Max bytes buffered ahead of emission (backpressure). */
   maxBufferedBytes?: number;
+  /** Decryptor used for segments that carry no key of their own. */
   decryptor?: Decryptor;
   keyInfo?: KeyInfo;
+  /**
+   * Resolves the decryptor for each segment. Takes precedence over
+   * `decryptor`/`keyInfo` so key-rotating playlists decrypt correctly.
+   */
+  resolveDecryptor?: (segment: Segment) => Decryptor | undefined;
   onProgress?: (done: number, total: number, bytes: number) => void;
   signal?: AbortSignal;
 }
@@ -50,9 +56,11 @@ export class SegmentPool {
     let inputIndex = 0;
 
     const launch = (seg: Segment) => {
-      const promise = this.fetchOne(seg).catch((e) => {
-        throw e;
-      });
+      const promise = this.fetchOne(seg);
+      // Segments fetched ahead of the head may reject while the caller is still
+      // awaiting an earlier one; mark those handles as observed so Node/the
+      // browser doesn't report an unhandled rejection.
+      promise.catch(() => {});
       queue.push({ segment: seg, promise, index: inputIndex++ });
     };
 
@@ -102,7 +110,9 @@ export class SegmentPool {
       retries: 3,
     });
     if (this.opts.signal?.aborted) throw new Error('canceled');
-    const dec = this.decryptor ? await this.decryptor.decrypt(raw, seg.sequence) : raw;
+    const decryptor =
+      this.opts.resolveDecryptor?.(seg) ?? this.decryptor ?? undefined;
+    const dec = decryptor ? await decryptor.decrypt(raw, seg.sequence) : raw;
     this.buffered += dec.length;
     this.bytesLoaded += dec.length;
     this.done++;
