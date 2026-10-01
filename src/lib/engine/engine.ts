@@ -214,6 +214,12 @@ export class DownloadEngine {
 
   private async downloadFmp4Track(playlist: ParsedPlaylist): Promise<Fmp4TrackBytes> {
     const decryptor = await makeDecryptor(playlist.key);
+    // The video playlist's key is pre-validated in run(), but an audio rendition
+    // (or the late CMAF branch) carries its own #EXT-X-KEY. Without a decryptor
+    // here we would silently emit ciphertext — fail loudly instead.
+    if (playlist.key && playlist.key.method !== 'NONE' && !decryptor) {
+      throw new ExtensionError('DECRYPT', `Unsupported encryption: ${playlist.key.method}`);
+    }
     let init: Uint8Array | null = null;
 
     if (playlist.initSegment) {
@@ -222,10 +228,11 @@ export class DownloadEngine {
     }
 
     const media: Uint8Array[] = [];
-    for await (const res of this.poolFor(playlist)) {
+    for await (const res of this.poolFor(playlist, undefined, undefined, decryptor ?? undefined)) {
       if (this.aborted) throw new ExtensionError('CANCELED');
       media.push(res.bytes);
-    }    for (const m of media) this.bytesLoaded += m.length;
+      this.bytesLoaded += res.bytes.length;
+    }
 
     return { init, media };
   }
@@ -243,6 +250,7 @@ export class DownloadEngine {
     playlist: ParsedPlaylist,
     skipIndices?: Set<number>,
     onSegmentDone?: (seq: number) => void,
+    decryptor?: import('./aesDecryptor').Decryptor,
   ): AsyncIterable<import('./segmentPool').SegmentResult> {
     let retries = 3;
     try {
@@ -253,7 +261,9 @@ export class DownloadEngine {
     }
     const pool = new SegmentPool({
       concurrency: this.job.concurrency,
-      decryptor: undefined,
+      // Must be forwarded: without it every AES-128 segment was emitted as
+      // undecrypted ciphertext while the canDecrypt gate above still passed.
+      decryptor,
       retries,
       skipIndices,
       onSegmentDone,
@@ -315,7 +325,7 @@ export class DownloadEngine {
       }
     }
 
-    for await (const res of this.poolFor(playlist, skipIndices, onSegmentDone)) {
+    for await (const res of this.poolFor(playlist, skipIndices, onSegmentDone, decryptor ?? undefined)) {
       if (this.aborted) throw new ExtensionError('CANCELED');
       const seg = res.bytes;
       this.tsBuffer.push(res.bytes);
