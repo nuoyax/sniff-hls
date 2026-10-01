@@ -85,4 +85,23 @@ describe('SegmentPool retry + resume', () => {
     await collect(pool, [seg(0), seg(1), seg(2)]);
     expect(done.sort()).toEqual([0, 1, 2]);
   });
+
+  it('coalesces per-segment progress into at most one emit per window', async () => {
+    vi.useFakeTimers();
+    try {
+      stubFetch();
+      const onProgress = vi.fn();
+      // 0 → never auto-fires; only the manual flush below can emit.
+      const pool = new SegmentPool({ concurrency: 1, retries: 0, progressIntervalMs: 0, onProgress });
+      const out = await collect(pool, [seg(0), seg(1), seg(2)]);
+      expect(out).toEqual([0, 1, 2]);
+      // Three segments fetched, but no per-segment onProgress calls.
+      expect(onProgress).not.toHaveBeenCalled();
+      pool.flushProgress();
+      expect(onProgress).toHaveBeenCalledTimes(1);
+      expect(onProgress).toHaveBeenCalledWith(3, 0, 9);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

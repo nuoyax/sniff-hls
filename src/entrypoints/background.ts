@@ -567,6 +567,10 @@ function onHostProgress(p: DownloadProgress) {
 async function onHostComplete(jobId: string, result: { sizeBytes: number; filename: string; format: import('@/lib/types').OutputFormat; downloadId?: number }) {
   const j = activeJobs.get(jobId);
   if (!j) return;
+  // Claim the job synchronously: COMPLETE is delivered on both the port and
+  // the broadcast path, and the awaits below would otherwise let a second
+  // copy run the whole completion twice (duplicate history writes + notify).
+  activeJobs.delete(jobId);
   j.status = 'complete';
   await updateHistory(j.historyId, {
     status: 'complete',
@@ -590,13 +594,16 @@ async function onHostComplete(jobId: string, result: { sizeBytes: number; filena
     }
   }
   broadcastProgress({ jobId, status: 'complete', done: j.done, total: j.total, bytesLoaded: result.sizeBytes, bytesTotal: result.sizeBytes, filename: result.filename, outputFormat: result.format });
-  activeJobs.delete(jobId);
   persistActiveJobs();
 }
 
 async function onHostError(jobId: string, error: { code: string; message: string }) {
   const j = activeJobs.get(jobId);
   if (!j) return;
+  // Same double-delivery guard as onHostComplete: ERROR is delivered on both
+  // the port and the broadcast path, so claim the job synchronously before the
+  // awaits below let a second copy run the whole path again.
+  activeJobs.delete(jobId);
   // An engine abort is a cancellation, not a failure — don't paint it red.
   if (error.code === 'CANCELED') {
     await updateHistory(j.historyId, { status: 'canceled' });
@@ -608,7 +615,6 @@ async function onHostError(jobId: string, error: { code: string; message: string
       bytesLoaded: j.bytesLoaded,
       bytesTotal: 0,
     });
-    activeJobs.delete(jobId);
     persistActiveJobs();
     return;
   }
@@ -628,7 +634,6 @@ async function onHostError(jobId: string, error: { code: string; message: string
       /* noop */
     }
   }
-  activeJobs.delete(jobId);
   persistActiveJobs();
 }
 
@@ -711,7 +716,7 @@ async function deleteDownloadByJob(jobId: string): Promise<void> {
 const progressSinks = new Map<string, Set<(e: any) => void>>();
 
 function setupProgressFanout() {
-  onProgressPort((jobId, send) => {
+  onProgressPort((jobId, send, onDisconnect) => {
     let set = progressSinks.get(jobId);
     if (!set) {
       set = new Set();
@@ -723,8 +728,12 @@ function setupProgressFanout() {
     if (j) {
       send({ jobId, status: j.status, done: j.done, total: j.total, bytesLoaded: j.bytesLoaded, bytesTotal: 0 });
     }
-    // We can't detect disconnect of the UI port from here easily; rely on
-    // periodic broadcasts. Keep the sink until job completes.
+    // Release the sink when the UI port goes away — otherwise the SW keeps a
+    // closure + port object per closed popup/manager page until it is recycled.
+    onDisconnect(() => {
+      set?.delete(send);
+      if (set && set.size === 0) progressSinks.delete(jobId);
+    });
   });
 }
 

@@ -17,12 +17,25 @@ const engines = new Map<string, DownloadEngine>();
 let port: any = null;
 
 function postToSw(msg: Record<string, unknown>): void {
-  try {
-    port?.postMessage(msg);
-  } catch {
-    /* port gone — reconnect will happen */
+  // Port is the primary (and normally only) delivery path. Broadcasting the
+  // same message via runtime.sendMessage as well made the SW receive every
+  // progress event twice, doubling its message load and history writes.
+  // Only fall back to the broadcast when no port is live (SW restart race).
+  if (port) {
+    try {
+      port.postMessage(msg);
+      return;
+    } catch {
+      /* port gone — fall through to the broadcast */
+    }
   }
-  // Also broadcast for SW listeners that use onMessage (best-effort).
+  bapi.runtime.sendMessage({ __host: true, ...msg }).catch(() => {});
+}
+
+/** Send a terminal message on both paths — cheap, and a dropped COMPLETE /
+ * ERROR would otherwise strand the job in the SW's activeJobs map. */
+function postCriticalToSw(msg: Record<string, unknown>): void {
+  postToSw(msg);
   bapi.runtime.sendMessage({ __host: true, ...msg }).catch(() => {});
 }
 
@@ -89,7 +102,7 @@ async function runJob(job: DownloadJob): Promise<void> {
 
         try {
           await whenDownloadSettled(downloadId, 30 * 60_000);
-          postToSw({
+          postCriticalToSw({
             kind: 'COMPLETE',
             jobId: job.id,
             result: {
@@ -100,7 +113,7 @@ async function runJob(job: DownloadJob): Promise<void> {
             },
           });
         } catch (e) {
-          postToSw({
+          postCriticalToSw({
             kind: 'ERROR',
             jobId: job.id,
             error: { code: 'DOWNLOAD', message: (e as Error).message },
@@ -109,7 +122,7 @@ async function runJob(job: DownloadJob): Promise<void> {
           setTimeout(() => URL.revokeObjectURL(url), 60_000);
         }
       } catch (e) {
-        postToSw({
+        postCriticalToSw({
           kind: 'ERROR',
           jobId: job.id,
           error: { code: 'DOWNLOAD', message: (e as Error).message },
@@ -118,7 +131,7 @@ async function runJob(job: DownloadJob): Promise<void> {
     },
     onError: (e: ExtensionError) => {
       engines.delete(job.id);
-      postToSw({
+      postCriticalToSw({
         kind: 'ERROR',
         jobId: job.id,
         error: { code: e.code, message: e.toHuman() },

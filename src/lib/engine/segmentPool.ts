@@ -1,6 +1,7 @@
 // Concurrency-limited segment fetcher that emits results in playlist order.
 // Bounded buffer with backpressure: won't fetch ahead beyond maxBufferedBytes.
 import { fetchBytes } from './fetcher';
+import { throttled, type Throttled } from '../platform/throttle';
 import type { Segment, KeyInfo } from '../types';
 import { createDecryptor, type Decryptor } from './aesDecryptor';
 import log from '../log';
@@ -29,6 +30,8 @@ export interface PoolOptions {
   /** Called after a segment is fetched+decrypted (for resume checkpoints). */
   onSegmentDone?: (sequence: number) => void;
   onProgress?: (done: number, total: number, bytes: number) => void;
+  /** Minimum gap between onProgress emits (default 200ms). */
+  progressIntervalMs?: number;
   signal?: AbortSignal;
 }
 
@@ -48,6 +51,8 @@ export class SegmentPool {
   private buffered = 0;
   private bytesLoaded = 0;
   private done = 0;
+  /** Coalesces per-segment progress into one emit per window. */
+  private progress: Throttled<[number, number, number]>;
   /** When set, new segment launches are held back (pause support). */
   private paused = false;
   private resumeWaiters: (() => void)[] = [];
@@ -55,6 +60,14 @@ export class SegmentPool {
   constructor(opts: PoolOptions) {
     this.opts = opts;
     this.decryptor = opts.decryptor ?? null;
+    this.progress = throttled(opts.progressIntervalMs ?? 200, (done, total, bytes) => {
+      this.opts.onProgress?.(done, total, bytes);
+    });
+  }
+
+  /** Emit the pending progress tick immediately (used before terminal states). */
+  flushProgress(): void {
+    this.progress.flush();
   }
 
   /** Pause launching new segments. In-flight requests are left to finish and
@@ -165,7 +178,7 @@ export class SegmentPool {
     this.bytesLoaded += dec.length;
     this.done++;
     this.opts.onSegmentDone?.(seg.sequence);
-    this.opts.onProgress?.(this.done, 0, this.bytesLoaded);
+    this.progress.call(this.done, 0, this.bytesLoaded);
     return dec;
   }
 }
