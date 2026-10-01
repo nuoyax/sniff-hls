@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { sendMessage, openProgressPort, type ProgressEvent } from '@/lib/platform/messaging';
 import { openOrFocusPage } from '@/lib/platform/pageOpener';
 import type { DetectedItem, DownloadProgress, OutputFormat, VariantInfo } from '@/lib/types';
@@ -139,6 +139,18 @@ export default function App() {
     await sendMessage({ type: 'OPEN_MANAGER' });
   }, []);
 
+  // Progress ports opened from the popup, keyed by jobId. They must be closed
+  // when the popup unmounts (or the job finishes) — a port left open keeps a
+  // sink alive in the SW and the port object alive in the popup for its life.
+  const portsRef = useRef(new Map<string, ReturnType<typeof openProgressPort>>());
+  useEffect(
+    () => () => {
+      for (const p of portsRef.current.values()) p.close();
+      portsRef.current.clear();
+    },
+    [],
+  );
+
   const startDownload = useCallback(
     async (url: string, variant: VariantInfo | undefined, customFilename?: string) => {
       if (tabId == null) return;
@@ -161,7 +173,16 @@ export default function App() {
       if (res.ok && res.data && typeof (res.data as any).jobId === 'string') {
         const jobId = (res.data as { jobId: string }).jobId;
         setActive((a) => ({ ...a, [url]: { jobId, status: 'queued', ratio: 0 } }));
+        // Reuse an existing port for this job; keep at most one per job.
+        portsRef.current.get(jobId)?.close();
         const port = openProgressPort(jobId);
+        portsRef.current.set(jobId, port);
+        const closePort = () => {
+          if (portsRef.current.get(jobId) === port) {
+            port.close();
+            portsRef.current.delete(jobId);
+          }
+        };
         port.onProgress((e: ProgressEvent) => {
           if ('kind' in e) return; // ignore log events
           const p = e as DownloadProgress;
@@ -170,6 +191,10 @@ export default function App() {
             ...a,
             [url]: { jobId, status: p.status, ratio, format: p.outputFormat, error: p.error },
           }));
+          // Terminal event — release the port instead of holding it forever.
+          if (p.status === 'complete' || p.status === 'error' || p.status === 'canceled') {
+            closePort();
+          }
         });
       } else {
         setActive((a) => ({

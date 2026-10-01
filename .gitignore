@@ -2,6 +2,7 @@ node_modules/
 dist/
 .output/
 .wxt/
+cache/
 .env
 .env.*
 # AI OS / Claude local config — never commit

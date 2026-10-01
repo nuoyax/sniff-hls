@@ -117,17 +117,24 @@ export function jobIdFromPort(name: string): string {
   return name.slice(PROGRESS_PORT_PREFIX.length);
 }
 
-/** Background-side: handle incoming progress ports and give the SW a sink. */
-export function onProgressPort(cb: (jobId: string, send: (e: ProgressEvent) => void) => void): void {
+/** Background-side: handle incoming progress ports and give the SW a sink.
+ * `onDisconnect` registers a cleanup callback for when that UI port goes away. */
+export function onProgressPort(
+  cb: (jobId: string, send: (e: ProgressEvent) => void, onDisconnect: (fn: () => void) => void) => void,
+): void {
   bapi.runtime.onConnect.addListener((port: any) => {
     if (!isProgressPort(port.name)) return;
     const jobId = jobIdFromPort(port.name);
-    cb(jobId, (e) => {
-      try {
-        port.postMessage(e);
-      } catch {
-        /* port closed */
-      }
-    });
+    cb(
+      jobId,
+      (e) => {
+        try {
+          port.postMessage(e);
+        } catch {
+          /* port closed */
+        }
+      },
+      (fn) => port.onDisconnect.addListener(fn),
+    );
   });
 }

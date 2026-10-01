@@ -8,6 +8,7 @@
 import { fetchText, fetchBytes } from './fetcher';
 import { parsePlaylist, pickBestVariant, pickAudioRendition } from './m3u8Parser';
 import { SegmentPool, makeDecryptor } from './segmentPool';
+import { throttled } from '../platform/throttle';
 import { TsTransmuxer } from './transmuxer';
 import { assembleMp4, assembleTs, extFor } from './blobAssembler';
 import { playlistLooksFmp4, isMpegTs, isIsoBmff } from './containerDetect';
@@ -47,6 +48,8 @@ export class DownloadEngine {
   private dataChunks: Uint8Array[] = [];
   private initSeg: Uint8Array | null = null;
   private bytesLoaded = 0;
+  /** Coalesced resume-checkpoint flush (set when resume tracking is active). */
+  private flushResume: (() => void) | undefined;
 
   constructor(
     private job: DownloadJob,
@@ -103,13 +106,22 @@ export class DownloadEngine {
         }
       }
       // Persist progress checkpoints as segments complete (VOD only).
+      // saveResumeState is a read-modify-write of the whole resume map, so it
+      // is coalesced into a window instead of running per segment; a final
+      // flush happens when the download finishes or fails.
+      let flushResume: (() => void) | undefined;
       if (resumable && !audio?.segments.length) {
         const fetched = new Set<number>(skipIndices ?? []);
+        const checkpoint = throttled(2000, () => {
+          void saveResumeState(resumeUrl, fetched).catch(() => {});
+        });
+        flushResume = () => checkpoint.flush();
         onSegmentDone = (seq: number) => {
           fetched.add(seq);
-          void saveResumeState(resumeUrl, fetched).catch(() => {});
+          checkpoint.call();
         };
       }
+      this.flushResume = flushResume;
 
       const decryptor = await makeDecryptor(video.key);
       const canDecrypt = !video.key || video.key.method === 'NONE' || decryptor;
@@ -130,6 +142,12 @@ export class DownloadEngine {
     } catch (e) {
       if (e instanceof ExtensionError) this.cb.onError(e);
       else this.cb.onError(new ExtensionError('UNKNOWN', (e as Error)?.message, e));
+    } finally {
+      // Persist whatever progress the coalescing window still holds, so a
+      // failed/cancelled download resumes from the true last segment.
+      // (Successful runs already cleared the checkpoint in finish().)
+      this.flushResume?.();
+      this.flushResume = undefined;
     }
   }
 
@@ -167,6 +185,11 @@ export class DownloadEngine {
     if (audioTrack) {
       try {
         const merged = await mergeFmp4Tracks(videoTrack, audioTrack);
+        // `merged` is now the surviving copy — drop the per-segment arrays the
+        // two tracks were holding so the Blob below does not stack on top of
+        // them (that was a full extra file-size worth of live segments).
+        videoTrack.media.length = 0;
+        audioTrack.media.length = 0;
         blob = new Blob([merged as BlobPart], { type: 'video/mp4' });
       } catch (e) {
         log.warn('A/V remux failed; falling back to video-only fMP4', e);
@@ -331,15 +354,20 @@ export class DownloadEngine {
     ) {
       log.info('engine: assembling fMP4 segments without playlist MAP');
       if (audio?.segments.length) {
+        let audioTrack: Fmp4TrackBytes | undefined;
         try {
-          const audioTrack = await this.downloadFmp4Track(audio);
+          audioTrack = await this.downloadFmp4Track(audio);
           const merged = await mergeFmp4Tracks(
             { init: null, media: this.tsBuffer },
             audioTrack,
           );
+          // Free the TS-side arrays before handing `merged` to the Blob.
+          this.tsBuffer.length = 0;
+          audioTrack.media.length = 0;
           return this.finish(new Blob([merged as BlobPart], { type: 'video/mp4' }), 'mp4', segments.length);
         } catch (e) {
           log.warn('late A/V remux failed; video-only fMP4', e);
+          if (audioTrack) audioTrack.media.length = 0;
         }
       }
       const r = assembleMp4(null, this.tsBuffer);
@@ -380,6 +408,7 @@ export class DownloadEngine {
 
     // Download finalized — clear any resume checkpoint for this playlist.
     const mediaUrl = this.job.variantUrl || this.job.url;
+    this.flushResume = undefined;
     void clearResumeState(mediaUrl).catch(() => {});
 
     const filename = `${this.job.baseFilename}.${extFor(format)}`;

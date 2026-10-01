@@ -25,9 +25,15 @@ export function concatFmp4Track(track: Fmp4TrackBytes): Uint8Array {
 }
 
 function toInput(data: Uint8Array): Input {
+  // BufferSource accepts an ArrayBufferView directly (AllowSharedBufferSource),
+  // so no `.slice()` — that was a full extra copy of the whole track purely to
+  // placate the typed-array generics, i.e. +1× file size at peak memory.
   return new Input({
     formats: ALL_FORMATS,
-    source: new BufferSource(data.slice()),
+    // mediabunny's BufferSource takes an AllowSharedBufferSource and does not
+    // copy — pass the view straight through. (The cast only bridges the
+    // Uint8Array<ArrayBufferLike> generic; no `.slice()` copy is made.)
+    source: new BufferSource(data as unknown as AllowSharedBufferSource),
   });
 }
 
